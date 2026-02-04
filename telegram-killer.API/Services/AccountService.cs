@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using telegram_killer.API.Data;
+using telegram_killer.API.DTOs.Response_DTOs;
+using telegram_killer.API.Exceptions;
 using telegram_killer.API.Models;
 using telegram_killer.API.Services.Interfaces;
 
@@ -11,14 +13,16 @@ public class AccountService : IAccountService
     private readonly ILogger<AccountService> _logger;
     private readonly IEmailSenderService _emailSenderService;
     private readonly IHasherService _hasherService;
+    private readonly ITokensProviderService _tokensProviderService;
     
     public AccountService(ApplicationContext applicationContext, ILogger<AccountService> logger,
-        IEmailSenderService emailSenderService, IHasherService hasherService)
+        IEmailSenderService emailSenderService, IHasherService hasherService, ITokensProviderService tokensProviderService)
     {
         _applicationContext = applicationContext;
         _logger = logger;
         _emailSenderService = emailSenderService;
         _hasherService = hasherService;
+        _tokensProviderService = tokensProviderService;
     }
     
     public async Task<User> RegisterUserAsync(string email)
@@ -39,7 +43,26 @@ public class AccountService : IAccountService
         return newUser;
     }
 
-    public async Task ConfirmEmailAsync(Guid userId, string confirmationCode)
+    public async Task<AuthResult> ConfirmEmailAndSignInAsync(Guid userId, string confirmationCode)
+    {
+        await ConfirmEmailAsync(userId, confirmationCode);
+
+        var user = await _applicationContext.Users.FindAsync(userId);
+
+        if (user == null)
+        {
+            _logger.LogWarning("Signing in user failed: user not found. UserId: {UserId}", userId);
+            throw new NotFoundException($"The user with the id {userId} was not found");
+        }
+        
+        return new AuthResult
+        {
+            AccessToken = _tokensProviderService.GenerateAccessToken(user),
+            RefreshToken = _tokensProviderService.GenerateRefreshToken()
+        };
+    }
+    
+    private async Task ConfirmEmailAsync(Guid userId, string confirmationCode)
     {
         var code = await _applicationContext.EmailConfirmationCodes
             .Where(c =>
@@ -87,4 +110,5 @@ public class AccountService : IAccountService
             "Email confirmed successfully. UserId={UserId}",
             userId);
     }
+
 }

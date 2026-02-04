@@ -19,7 +19,7 @@ public class AccountController : ControllerBase
     [EndpointDescription("Registers a user by requiring an email in the request body." +
                          " This sends email confirmation code to user's email")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<RegisterUserResponse>(StatusCodes.Status200OK, "application/json")]
     [Consumes("application/json")]
     [HttpPost("signup")]
@@ -38,12 +38,13 @@ public class AccountController : ControllerBase
     [EndpointSummary("The endpoint needed for confirming the email of the registered user")]
     [EndpointDescription("Confirms user's email by accepting user's Id and confirmation code in the body. Note: This endpoint is idempotent")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
     [HttpPost("email/confirm")]
-    public async Task<IActionResult> ConfirmEmail(ConfirmEmailRequest request)
+    public async Task<IActionResult> ConfirmEmailAndSignIn(ConfirmEmailRequest request)
     {
-        await _accountService.ConfirmEmailAsync(request.UserId, request.ConfirmationCode);
-        return NoContent();
+         var result = await _accountService.ConfirmEmailAndSignInAsync(request.UserId, request.ConfirmationCode);
+         return Ok(result);
     }
 }

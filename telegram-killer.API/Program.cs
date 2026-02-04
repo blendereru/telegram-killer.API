@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using telegram_killer.API.Data;
+using telegram_killer.API.Extensions;
 using telegram_killer.API.Options;
 using telegram_killer.API.Services;
 using telegram_killer.API.Services.Interfaces;
@@ -57,6 +58,7 @@ builder.Services.Configure<SecuritySettings>(builder.Configuration.GetSection("S
 builder.Services.AddSingleton<IHasherService, HasherService>();
 builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ITokensProviderService, TokensProviderService>();
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
@@ -67,6 +69,6 @@ if (app.Environment.IsDevelopment())
     });
 }
 app.UseSerilogRequestLogging();
-app.UseExceptionHandler();
+app.UseProblemDetailsException();
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 app.Run();
