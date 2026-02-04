@@ -19,6 +19,7 @@ public class AccountController : ControllerBase
     [EndpointDescription("Registers a user by requiring an email in the request body." +
                          " This sends email confirmation code to user's email")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<RegisterUserResponse>(StatusCodes.Status200OK, "application/json")]
     [Consumes("application/json")]
@@ -35,8 +36,23 @@ public class AccountController : ControllerBase
         return Ok(response);
     }
 
+    [EndpointSummary("The endpoint needed for logging in a user")]
+    [EndpointDescription("Registers a user by requiring an email in the request body." +
+                         " This sends email confirmation code to user's email")]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
+    [Consumes("application/json")]
+    [HttpPost("signin")]
+    public async Task<IActionResult> Login(GetUserEmailRequest request)
+    {
+        var response = await _accountService.LoginUserAsync(request.Email);
+        return Ok(response);
+    }
+    
     [EndpointSummary("The endpoint needed for confirming the email of the registered user")]
-    [EndpointDescription("Confirms user's email by accepting user's Id and confirmation code in the body. Note: This endpoint is idempotent")]
+    [EndpointDescription("Confirms user's email by accepting user's Id and confirmation code in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]

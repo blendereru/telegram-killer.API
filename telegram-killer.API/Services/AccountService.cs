@@ -14,19 +14,29 @@ public class AccountService : IAccountService
     private readonly IEmailSenderService _emailSenderService;
     private readonly IHasherService _hasherService;
     private readonly ITokensProviderService _tokensProviderService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     
     public AccountService(ApplicationContext applicationContext, ILogger<AccountService> logger,
-        IEmailSenderService emailSenderService, IHasherService hasherService, ITokensProviderService tokensProviderService)
+        IEmailSenderService emailSenderService, IHasherService hasherService,
+        ITokensProviderService tokensProviderService, IHttpContextAccessor httpContextAccessor)
     {
         _applicationContext = applicationContext;
         _logger = logger;
         _emailSenderService = emailSenderService;
         _hasherService = hasherService;
         _tokensProviderService = tokensProviderService;
+        _httpContextAccessor = httpContextAccessor;
     }
     
     public async Task<User> RegisterUserAsync(string email)
     {
+        var existingUser = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+        if (existingUser != null)
+        {
+            _logger.LogWarning("User registration failed: user with the same email already exists. UserId: {UserId}", existingUser.Id);
+            throw new AlreadyExistsException("User with the same email already exists");
+        }
+        
         var newUser = new User
         {
             Email = email,
@@ -43,6 +53,27 @@ public class AccountService : IAccountService
         return newUser;
     }
 
+    public async Task<AuthResult> LoginUserAsync(string email)
+    {
+        var user = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (user == null)
+        {
+            _logger.LogWarning("Login failed: user with the specified email not found");
+            throw new NotFoundException("User with the specified email not found");
+        }
+
+        var authResult = new AuthResult
+        {
+            AccessToken = _tokensProviderService.GenerateAccessToken(user),
+            RefreshToken = _tokensProviderService.GenerateRefreshToken()
+        };
+
+        await CreateRefreshSessionAsync(user.Id, authResult);
+        
+        return authResult;
+    }
+
     public async Task<AuthResult> ConfirmEmailAndSignInAsync(Guid userId, string confirmationCode)
     {
         await ConfirmEmailAsync(userId, confirmationCode);
@@ -55,11 +86,14 @@ public class AccountService : IAccountService
             throw new NotFoundException($"The user with the id {userId} was not found");
         }
         
-        return new AuthResult
+        var authResult = new AuthResult
         {
             AccessToken = _tokensProviderService.GenerateAccessToken(user),
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
+
+        await CreateRefreshSessionAsync(userId, authResult);
+        return authResult;
     }
     
     private async Task ConfirmEmailAsync(Guid userId, string confirmationCode)
@@ -109,6 +143,26 @@ public class AccountService : IAccountService
         _logger.LogInformation(
             "Email confirmed successfully. UserId={UserId}",
             userId);
+    }
+
+    private async Task CreateRefreshSessionAsync(Guid userId, AuthResult result)
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        
+        var refreshSession = new RefreshSession
+        {
+            RefreshToken = result.RefreshToken,
+            UA = httpContext.Request.Headers.UserAgent.ToString(),
+            Ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1",
+            UserId = userId,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        
+        _applicationContext.RefreshSessions.Add(refreshSession);
+        await _applicationContext.SaveChangesAsync();
+        
+        _logger.LogInformation("Refresh session created successfully for user with Id {UserId}", userId);
     }
 
 }

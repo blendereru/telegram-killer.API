@@ -11,7 +11,7 @@ using telegram_killer.API.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
-//builder.Services.Configure<JwtConfigurationOptions>(builder.Configuration.GetSection("JwtConfigurationOptions"));
+builder.Services.Configure<JwtConfigurationOptions>(builder.Configuration.GetSection("JwtConfigurationOptions"));
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
     loggerConfiguration.ReadFrom.Configuration(context.Configuration);
@@ -53,6 +53,7 @@ builder.Services.AddDbContext<ApplicationContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 builder.Services.Configure<SecuritySettings>(builder.Configuration.GetSection("SecuritySettings"));
 builder.Services.AddSingleton<IHasherService, HasherService>();

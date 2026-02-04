@@ -7,11 +7,14 @@ public sealed class ProblemDetailsExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly IProblemDetailsService _problemDetailsService;
+    private readonly ILogger<ProblemDetailsExceptionMiddleware> _logger;
     
-    public ProblemDetailsExceptionMiddleware(RequestDelegate next, IProblemDetailsService problemDetailsService)
+    public ProblemDetailsExceptionMiddleware(RequestDelegate next, IProblemDetailsService problemDetailsService,
+        ILogger<ProblemDetailsExceptionMiddleware> logger)
     {
         _next = next;
         _problemDetailsService = problemDetailsService;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -22,6 +25,11 @@ public sealed class ProblemDetailsExceptionMiddleware
         }
         catch (Exception exception)
         {
+            _logger.LogError(
+                exception,
+                "Unhandled exception while executing request {Method} {Path}",
+                context.Request.Method,
+                context.Request.Path);
             await HandleExceptionAsync(context, exception);
         }
     }
@@ -32,15 +40,11 @@ public sealed class ProblemDetailsExceptionMiddleware
     {
         var problemDetails = new ProblemDetails
         {
-            Type = exception is NotFoundException ? "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5" :
-                "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1",
-            Title = exception is NotFoundException ? exception.Message : "An error occured while processing you request",
-            Status = exception is NotFoundException
-                ? StatusCodes.Status404NotFound
-                : StatusCodes.Status500InternalServerError,
             Instance = $"{context.Request.Method} {context.Request.Path}"
         };
-
+        
+        DecorateProblemDetails(problemDetails, exception);
+        
         var problemDetailsContext = new ProblemDetailsContext
         {
             HttpContext = context,
@@ -48,8 +52,29 @@ public sealed class ProblemDetailsExceptionMiddleware
             Exception = exception
         };
 
-        context.Response.StatusCode = exception is NotFoundException ? StatusCodes.Status404NotFound : StatusCodes.Status500InternalServerError;
+        context.Response.StatusCode = problemDetails.Status!.Value;
         await _problemDetailsService.WriteAsync(problemDetailsContext);
     }
-    
+
+    private void DecorateProblemDetails(ProblemDetails problemDetails, Exception exception)
+    {
+        problemDetails.Title = exception.Message;
+        
+        if (exception is NotFoundException notFoundException)
+        {
+            problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5";
+            problemDetails.Status = StatusCodes.Status404NotFound;
+        }
+        else if (exception is AlreadyExistsException alreadyExistsException)
+        {
+            problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10";
+            problemDetails.Status = StatusCodes.Status409Conflict;
+        }
+        else
+        {
+            problemDetails.Title = "An error occured while processing you request";
+            problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1";
+            problemDetails.Status = StatusCodes.Status500InternalServerError;
+        }
+    }
 }
