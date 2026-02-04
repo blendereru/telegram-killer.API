@@ -16,7 +16,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
     loggerConfiguration.ReadFrom.Configuration(context.Configuration);
 });
-builder.Services.AddOpenApi("swagger");
+builder.Services.AddOpenApi();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -61,9 +61,13 @@ builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ITokensProviderService, TokensProviderService>();
 var app = builder.Build();
+using var scope = app.Services.CreateScope();
+var serviceProvider = scope.ServiceProvider;
+var context = serviceProvider.GetRequiredService<ApplicationContext>();
+await context.Database.MigrateAsync();
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi("/openapi/v1/{documentName}.json");
+    app.MapOpenApi();
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "v1");
@@ -71,5 +75,7 @@ if (app.Environment.IsDevelopment())
 }
 app.UseSerilogRequestLogging();
 app.UseProblemDetailsException();
-app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
 app.Run();
