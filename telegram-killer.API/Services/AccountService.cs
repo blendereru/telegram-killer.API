@@ -74,6 +74,60 @@ public class AccountService : IAccountService
         return authResult;
     }
 
+    public async Task<AuthResult> RefreshTokensAsync(string refreshToken)
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+        {
+            _logger.LogWarning("HttpContext object not found");
+            throw new ApplicationException("Http request context not found");
+        }
+        
+        var refreshSession = await _applicationContext.RefreshSessions
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.RefreshToken == refreshToken);
+        
+        if (refreshSession == null || refreshSession.ExpiresAt < DateTimeOffset.UtcNow)
+        {
+            //var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+            //var ua = httpContext.Request.Headers.UserAgent.ToString();
+            
+            _logger.LogWarning("Refreshing tokens failed: refresh token is expired or not found");
+            
+            throw new UnauthorizedException("Invalid or expired session. Re-authenticate to continue.");
+        }
+        
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        
+        if (refreshSession.Ip != ip)
+        {
+            _logger.LogWarning(
+                "Refresh token IP mismatch. UserId: {UserId}, TokenIp: {TokenIp}, RequestIp: {RequestIp}",
+                refreshSession.UserId,
+                refreshSession.Ip,
+                ip
+            );
+            throw new UnauthorizedException("Invalid or expired session. Re-authenticate to continue.");
+        }
+        
+        await _applicationContext.RefreshSessions
+            .Where(r => r.Id == refreshSession.Id)
+            .ExecuteDeleteAsync();
+        
+        _logger.LogInformation(
+            "Refresh session record with Id {RefreshSessionId} deleted successfully. UserId: {UserId}",
+            refreshSession.Id, refreshSession.UserId);
+
+        var authResult = new AuthResult
+        {
+            AccessToken = _tokensProviderService.GenerateAccessToken(refreshSession.User),
+            RefreshToken = _tokensProviderService.GenerateRefreshToken()
+        };
+
+        await CreateRefreshSessionAsync(refreshSession.UserId, authResult);
+        return authResult;
+    }
+
     public async Task<AuthResult> ConfirmEmailAndSignInAsync(Guid userId, string confirmationCode)
     {
         await ConfirmEmailAsync(userId, confirmationCode);
@@ -148,6 +202,12 @@ public class AccountService : IAccountService
     private async Task CreateRefreshSessionAsync(Guid userId, AuthResult result)
     {
         var httpContext = _httpContextAccessor.HttpContext;
+
+        if (httpContext == null)
+        {
+            _logger.LogWarning("HttpContext object not found");
+            throw new ApplicationException("Http request context not found");
+        }
         
         var refreshSession = new RefreshSession
         {
@@ -164,5 +224,4 @@ public class AccountService : IAccountService
         
         _logger.LogInformation("Refresh session created successfully for user with Id {UserId}", userId);
     }
-
 }

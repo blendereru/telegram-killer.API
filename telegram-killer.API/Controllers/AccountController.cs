@@ -63,4 +63,18 @@ public class AccountController : ControllerBase
          var result = await _accountService.ConfirmEmailAndSignInAsync(request.UserId, request.ConfirmationCode);
          return Ok(result);
     }
+
+    [EndpointSummary("The endpoint needed for refreshing(updating, renewing) the tokens")]
+    [EndpointDescription(
+        "Refreshes current user's session by refreshing the tokens. This requires refresh token in the body")]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
+    [HttpPost("tokens/refresh")]
+    public async Task<IActionResult> RefreshTokens(GetRefreshTokenRequest request)
+    {
+        var result = await _accountService.RefreshTokensAsync(request.RefreshToken);
+        return Ok(result);
+    }
 }
