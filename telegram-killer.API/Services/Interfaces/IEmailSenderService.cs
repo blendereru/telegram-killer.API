@@ -1,6 +1,8 @@
+using telegram_killer.API.Models;
+
 namespace telegram_killer.API.Services.Interfaces;
 
 public interface IEmailSenderService
 {
-    Task SendEmailConfirmationCodeAsync(string email);
+    Task SendEmailConfirmationCodeAsync(User user);
 }

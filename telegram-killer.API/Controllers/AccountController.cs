@@ -42,12 +42,17 @@ public class AccountController : ControllerBase
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType<LoginUserResponse>(StatusCodes.Status200OK, "application/json")]
     [Consumes("application/json")]
     [HttpPost("signin")]
     public async Task<IActionResult> Login(GetUserEmailRequest request)
     {
-        var response = await _accountService.LoginUserAsync(request.Email);
+        await _accountService.LoginUserAsync(request.Email);
+        var response = new LoginUserResponse
+        {
+            Message = "User successfully logged in. Waiting for email confirmation."
+        };
+        
         return Ok(response);
     }
     

@@ -49,11 +49,11 @@ public class AccountService : IAccountService
         
         _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
         
-        await _emailSenderService.SendEmailConfirmationCodeAsync(newUser.Email);
+        await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
         return newUser;
     }
 
-    public async Task<AuthResult> LoginUserAsync(string email)
+    public async Task LoginUserAsync(string email)
     {
         var user = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
 
@@ -63,15 +63,11 @@ public class AccountService : IAccountService
             throw new NotFoundException("User with the specified email not found");
         }
 
-        var authResult = new AuthResult
-        {
-            AccessToken = _tokensProviderService.GenerateAccessToken(user),
-            RefreshToken = _tokensProviderService.GenerateRefreshToken()
-        };
-
-        await CreateRefreshSessionAsync(user.Id, authResult);
+        _logger.LogInformation("User with Id {UserId} is logging in...", user.Id);
         
-        return authResult;
+        await _emailSenderService.SendEmailConfirmationCodeAsync(user);
+        
+        _logger.LogInformation("User with Id {UserId} has successfully logged in. Waiting for email confirmation", user.Id);
     }
 
     public async Task<AuthResult> RefreshTokensAsync(string refreshToken)

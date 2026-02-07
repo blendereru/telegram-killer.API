@@ -1,6 +1,5 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using telegram_killer.API.Data;
@@ -26,17 +25,8 @@ public class EmailSenderService : IEmailSenderService
         _hasherService = hasherService;
     }
     
-    public async Task SendEmailConfirmationCodeAsync(string email)
+    public async Task SendEmailConfirmationCodeAsync(User user)
     {
-        var emailHash = _hasherService.HashEmailForLogging(email);
-        
-        var user = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
-        if (user == null)
-        {
-            _logger.LogWarning("Sending email confirmation code failed. EmailHash = {EmailHash}", emailHash);
-            return;
-        }
-        
         var code = Random.Shared.Next(1000000, 9999999).ToString();
         
         var message = new MimeMessage();
@@ -45,7 +35,7 @@ public class EmailSenderService : IEmailSenderService
             _emailSettings.FromName,
             _emailSettings.FromEmail));
         
-        message.To.Add(MailboxAddress.Parse(email));
+        message.To.Add(MailboxAddress.Parse(user.Email));
         
         message.Body = new BodyBuilder
         {
@@ -86,11 +76,11 @@ public class EmailSenderService : IEmailSenderService
             _applicationContext.EmailConfirmationCodes.Add(confirmationCode);
             await _applicationContext.SaveChangesAsync();
             
-            _logger.LogInformation("Confirmation email sent to {EmailHash}", emailHash);
+            _logger.LogInformation("Email confirmation code sent to user with Id {UserId}", user.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email to {EmailHash}", emailHash);
+            _logger.LogError(ex, "Failed to send email confirmation code to user with Id {UserId}", user.Id);
             throw;
         }
     }
