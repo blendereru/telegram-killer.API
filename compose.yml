@@ -41,7 +41,8 @@ services:
     image: datalust/seq:latest
     container_name: seq
     environment:
-      - ACCEPT_EULA=Y
+      - ACCEPT_EULA=Y,
+      - SEQ_FIRSTRUN_ADMINPASSWORD=YOUR_SECURE_PASSWORD
     ports:
       - "5341:5341"
       - "8082:80"
