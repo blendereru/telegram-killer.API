@@ -124,17 +124,9 @@ public class AccountService : IAccountService
         return authResult;
     }
 
-    public async Task<AuthResult> ConfirmEmailAndSignInAsync(Guid userId, string confirmationCode)
+    public async Task<AuthResult> ConfirmEmailAndSignInAsync(string email, string confirmationCode)
     {
-        await ConfirmEmailAsync(userId, confirmationCode);
-
-        var user = await _applicationContext.Users.FindAsync(userId);
-
-        if (user == null)
-        {
-            _logger.LogWarning("Signing in user failed: user not found. UserId: {UserId}", userId);
-            throw new NotFoundException($"The user with the id {userId} was not found");
-        }
+        var user = await ConfirmEmailAsync(email, confirmationCode);
         
         var authResult = new AuthResult
         {
@@ -142,35 +134,28 @@ public class AccountService : IAccountService
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
 
-        await CreateRefreshSessionAsync(userId, authResult);
+        await CreateRefreshSessionAsync(user.Id, authResult);
         return authResult;
     }
     
-    private async Task ConfirmEmailAsync(Guid userId, string confirmationCode)
+    private async Task<User> ConfirmEmailAsync(string email, string confirmationCode)
     {
         var code = await _applicationContext.EmailConfirmationCodes
+            .Include(c => c.User)
             .Where(c =>
-                c.UserId == userId &&
+                c.User.Email == email &&
                 c.ExpiresAt > DateTimeOffset.UtcNow)
             .OrderByDescending(c => c.CreatedAt)
-            .Include(c => c.User)
             .FirstOrDefaultAsync();
-
+        
         if (code == null)
         {
             _logger.LogWarning(
-                "Email confirmation failed: code not found. UserId={UserId}",
-                userId);
-            return;
+                "Email confirmation failed: code not found.");
+            throw new NotFoundException("The user email or confirmation code is invalid");
         }
-
-        if (code.User.IsEmailConfirmed)
-        {
-            _logger.LogInformation(
-                "Email already confirmed. UserId={UserId}",
-                userId);
-            return;
-        }
+        
+        var userId = code.User.Id;
 
         if (!_hasherService.VerifyConfirmationCode(
                 confirmationCode,
@@ -179,7 +164,7 @@ public class AccountService : IAccountService
             _logger.LogWarning(
                 "Email confirmation failed: invalid code. UserId={UserId}",
                 userId);
-            return;
+            throw new NotFoundException("The user email or confirmation code is invalid");
         }
         
         code.User.IsEmailConfirmed = true;
@@ -193,6 +178,8 @@ public class AccountService : IAccountService
         _logger.LogInformation(
             "Email confirmed successfully. UserId={UserId}",
             userId);
+        
+        return code.User;
     }
 
     private async Task CreateRefreshSessionAsync(Guid userId, AuthResult result)

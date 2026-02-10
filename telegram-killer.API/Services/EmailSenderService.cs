@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Options;
@@ -27,7 +28,7 @@ public class EmailSenderService : IEmailSenderService
     
     public async Task SendEmailConfirmationCodeAsync(User user)
     {
-        var code = Random.Shared.Next(1000000, 9999999).ToString();
+        var code = RandomNumberGenerator.GetInt32(1000000, 10000000).ToString();
         
         var message = new MimeMessage();
         

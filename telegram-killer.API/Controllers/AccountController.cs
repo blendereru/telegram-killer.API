@@ -29,7 +29,6 @@ public class AccountController : ControllerBase
         var user = await _accountService.RegisterUserAsync(request.Email);
         var response = new RegisterUserResponse
         {
-            UserId = user.Id,
             RegisteredAt = user.RegisteredAt,
             Message = "User successfully registered. Waiting for email confirmation."
         };
@@ -65,7 +64,7 @@ public class AccountController : ControllerBase
     [HttpPost("email/confirm")]
     public async Task<IActionResult> ConfirmEmailAndSignIn(ConfirmEmailRequest request)
     {
-         var result = await _accountService.ConfirmEmailAndSignInAsync(request.UserId, request.ConfirmationCode);
+         var result = await _accountService.ConfirmEmailAndSignInAsync(request.Email, request.ConfirmationCode);
          return Ok(result);
     }
 
