@@ -105,6 +105,28 @@ public class AccountService : IAccountService
             );
             throw new UnauthorizedException("Invalid or expired session. Re-authenticate to continue.");
         }
+
+        var activeRefreshSessions = _applicationContext.RefreshSessions
+            .Where(r => r.UserId == refreshSession.Id);
+
+        if (activeRefreshSessions.Count() >= 5)
+        {
+            _logger.LogWarning("User has 5 or more active sessions. Executing deletion of user's sessions. UserId: {UserId}", refreshSession.UserId);
+            
+            _applicationContext.RefreshSessions.RemoveRange(activeRefreshSessions);
+            await _applicationContext.SaveChangesAsync();
+            
+            _logger.LogInformation("Successfully deleted user's active sessions. UserId: {UserId}", refreshSession.UserId);
+            
+            var result = new AuthResult
+            {
+                AccessToken = _tokensProviderService.GenerateAccessToken(refreshSession.User),
+                RefreshToken = _tokensProviderService.GenerateRefreshToken()
+            };
+            
+            await CreateRefreshSessionAsync(refreshSession.UserId, result);
+            return result;
+        }
         
         await _applicationContext.RefreshSessions
             .Where(r => r.Id == refreshSession.Id)
