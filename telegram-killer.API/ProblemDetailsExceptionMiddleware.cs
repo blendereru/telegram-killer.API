@@ -60,15 +60,20 @@ public sealed class ProblemDetailsExceptionMiddleware
     {
         problemDetails.Title = exception.Message;
         
-        if (exception is NotFoundException notFoundException)
+        if (exception.GetType() == typeof(NotFoundException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5";
             problemDetails.Status = StatusCodes.Status404NotFound;
         }
-        else if (exception is AlreadyExistsException alreadyExistsException)
+        else if (exception.GetType() == typeof(AlreadyExistsException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10";
             problemDetails.Status = StatusCodes.Status409Conflict;
+        }
+        else if (exception.GetType() == typeof(ForbiddenException))
+        {
+            problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.4";
+            problemDetails.Status = StatusCodes.Status403Forbidden;
         }
         else
         {

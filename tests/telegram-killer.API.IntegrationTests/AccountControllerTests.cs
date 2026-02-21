@@ -1,6 +1,4 @@
-using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc;
 using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.IntegrationTests.Helpers;
 

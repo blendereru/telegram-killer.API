@@ -72,77 +72,63 @@ public class AccountService : IAccountService
 
     public async Task<AuthResult> RefreshTokensAsync(string refreshToken)
     {
-        var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext == null)
-        {
-            _logger.LogWarning("HttpContext object not found");
-            throw new ApplicationException("Http request context not found");
-        }
-        
+        var httpContext = _httpContextAccessor.HttpContext 
+            ?? throw new ApplicationException("Http request context not found");
+
         var refreshSession = await _applicationContext.RefreshSessions
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.RefreshToken == refreshToken);
         
         if (refreshSession == null || refreshSession.ExpiresAt < DateTimeOffset.UtcNow)
         {
-            //var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-            //var ua = httpContext.Request.Headers.UserAgent.ToString();
-            
-            _logger.LogWarning("Refreshing tokens failed: refresh token is expired or not found");
-            
-            throw new UnauthorizedException("Invalid or expired session. Re-authenticate to continue.");
+            _logger.LogWarning("Refresh failed: token expired or not found.");
+            throw new UnauthorizedException("Invalid session.");
         }
         
-        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-        
-        if (refreshSession.Ip != ip)
+        var currentIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        if (refreshSession.Ip != currentIp)
         {
-            _logger.LogWarning(
-                "Refresh token IP mismatch. UserId: {UserId}, TokenIp: {TokenIp}, RequestIp: {RequestIp}",
-                refreshSession.UserId,
-                refreshSession.Ip,
-                ip
-            );
-            throw new UnauthorizedException("Invalid or expired session. Re-authenticate to continue.");
-        }
-
-        var activeRefreshSessions = _applicationContext.RefreshSessions
-            .Where(r => r.UserId == refreshSession.Id);
-
-        if (activeRefreshSessions.Count() >= 5)
-        {
-            _logger.LogWarning("User has 5 or more active sessions. Executing deletion of user's sessions. UserId: {UserId}", refreshSession.UserId);
-            
-            _applicationContext.RefreshSessions.RemoveRange(activeRefreshSessions);
-            await _applicationContext.SaveChangesAsync();
-            
-            _logger.LogInformation("Successfully deleted user's active sessions. UserId: {UserId}", refreshSession.UserId);
-            
-            var result = new AuthResult
-            {
-                AccessToken = _tokensProviderService.GenerateAccessToken(refreshSession.User),
-                RefreshToken = _tokensProviderService.GenerateRefreshToken()
-            };
-            
-            await CreateRefreshSessionAsync(refreshSession.UserId, result);
-            return result;
+            _logger.LogWarning("IP mismatch for User: {UserId}", refreshSession.UserId);
+            throw new UnauthorizedException("Invalid session.");
         }
         
-        await _applicationContext.RefreshSessions
-            .Where(r => r.Id == refreshSession.Id)
-            .ExecuteDeleteAsync();
-        
-        _logger.LogInformation(
-            "Refresh session record with Id {RefreshSessionId} deleted successfully. UserId: {UserId}",
-            refreshSession.Id, refreshSession.UserId);
-
         var authResult = new AuthResult
         {
             AccessToken = _tokensProviderService.GenerateAccessToken(refreshSession.User),
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
+        
+        using var transaction = await _applicationContext.Database.BeginTransactionAsync();
+        try
+        {
+            var activeSessions = _applicationContext.RefreshSessions
+                .Where(r => r.UserId == refreshSession.UserId);
 
-        await CreateRefreshSessionAsync(refreshSession.UserId, authResult);
+            var sessionCount = await activeSessions.CountAsync();
+
+            if (sessionCount >= 5)
+            {
+                _logger.LogInformation("Session limit reached. Nuking all sessions for User: {UserId}", refreshSession.UserId);
+                _applicationContext.RefreshSessions.RemoveRange(activeSessions);
+            }
+            else
+            {
+                _applicationContext.RefreshSessions.Remove(refreshSession);
+            }
+
+            await _applicationContext.SaveChangesAsync();
+            
+            await CreateRefreshSessionAsync(refreshSession.UserId, authResult);
+            
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Failed to rotate refresh tokens for User: {UserId}", refreshSession.UserId);
+            throw;
+        }
+
         return authResult;
     }
 
@@ -159,7 +145,31 @@ public class AccountService : IAccountService
         await CreateRefreshSessionAsync(user.Id, authResult);
         return authResult;
     }
-    
+
+    public async Task LogoutAsync(string refreshToken, Guid userId)
+    {
+        var refreshSession = await _applicationContext.RefreshSessions
+            .FirstOrDefaultAsync(r => r.RefreshToken == refreshToken);
+        
+        if (refreshSession == null)
+        {
+            _logger.LogWarning("Logout attempted with non-existent token.");
+            return;
+        }
+
+        if (refreshSession.UserId != userId)
+        {
+            _logger.LogCritical("Security Breach: User {UserId} tried to revoke token for User {OwnerId}", 
+                userId, refreshSession.UserId);
+            throw new ForbiddenException("You do not have permission to revoke this session.");
+        }
+        
+        _applicationContext.RefreshSessions.Remove(refreshSession);
+        await _applicationContext.SaveChangesAsync();
+        
+        _logger.LogInformation("Logout completed successfully. UserId: {UserId}", refreshSession.UserId);
+    }
+
     private async Task<User> ConfirmEmailAsync(string email, string confirmationCode)
     {
         var code = await _applicationContext.EmailConfirmationCodes

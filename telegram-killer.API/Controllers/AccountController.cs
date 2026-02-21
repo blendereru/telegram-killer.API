@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.JsonWebTokens;
 using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.Services.Interfaces;
@@ -80,5 +82,18 @@ public class AccountController : ControllerBase
     {
         var result = await _accountService.RefreshTokensAsync(request.RefreshToken);
         return Ok(result);
+    }
+    
+    [EndpointSummary("The endpoint needed to log user out from the system")]
+    [EndpointDescription("Logs out user from the system by deleting his refresh session from db. This requires refresh token in the body")]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(GetRefreshTokenRequest request) 
+    {
+        var userId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? Guid.Empty.ToString());
+        await _accountService.LogoutAsync(request.RefreshToken, userId);
+        return NoContent();
     }
 }

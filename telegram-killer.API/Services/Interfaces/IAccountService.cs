@@ -9,4 +9,5 @@ public interface IAccountService
     Task LoginUserAsync(string email);
     Task<AuthResult> ConfirmEmailAndSignInAsync(string email, string confirmationCode);
     Task<AuthResult> RefreshTokensAsync(string refreshToken);
+    Task LogoutAsync(string refreshToken, Guid userId);
 }
