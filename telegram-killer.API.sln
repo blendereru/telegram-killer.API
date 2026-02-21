@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "telegram-killer.API", "telegram-killer.API\telegram-killer.API.csproj", "{F2A993E6-81F2-4CC1-AA21-D2DD092705B0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "telegram-killer.API.IntegrationTests", "tests\telegram-killer.API.IntegrationTests\telegram-killer.API.IntegrationTests.csproj", "{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{F2A993E6-81F2-4CC1-AA21-D2DD092705B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F2A993E6-81F2-4CC1-AA21-D2DD092705B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F2A993E6-81F2-4CC1-AA21-D2DD092705B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

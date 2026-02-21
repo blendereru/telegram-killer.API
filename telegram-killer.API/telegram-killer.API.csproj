@@ -9,6 +9,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="telegram-killer.API.IntegrationTests" />
+    </ItemGroup>
+    
+    <ItemGroup>
       <PackageReference Include="MailKit" Version="4.14.1" />
       <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.12" />
       <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.12" />
@@ -24,5 +28,4 @@
       <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
       <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.6" />
     </ItemGroup>
-
 </Project>
