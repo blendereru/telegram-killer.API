@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
-using telegram_killer.API;
 using telegram_killer.API.Data;
 using telegram_killer.API.Extensions;
 using telegram_killer.API.Options;
 using telegram_killer.API.Services;
 using telegram_killer.API.Services.Interfaces;
+using telegram_killer.API.Transformers;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
@@ -21,6 +21,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+    options.AddOperationTransformer<SecurityOperationTransformer>();
 });
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
