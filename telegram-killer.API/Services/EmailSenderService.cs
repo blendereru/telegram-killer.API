@@ -61,11 +61,7 @@ public class EmailSenderService : IEmailSenderService
             await client.AuthenticateAsync(
                 _emailSettings.Username,
                 _emailSettings.Password);
-
-            await client.SendAsync(message);
-
-            await client.DisconnectAsync(true);
-
+            
             var confirmationCode = new EmailConfirmationCode
             {
                 UserId = user.Id,
@@ -76,6 +72,12 @@ public class EmailSenderService : IEmailSenderService
             
             _applicationContext.EmailConfirmationCodes.Add(confirmationCode);
             await _applicationContext.SaveChangesAsync();
+            
+            _logger.LogInformation("Saved email confirmation code for UserId: {UserId}", user.Id);
+            
+            await client.SendAsync(message);
+
+            await client.DisconnectAsync(true);
             
             _logger.LogInformation("Email confirmation code sent to user with Id {UserId}", user.Id);
         }

@@ -37,20 +37,31 @@ public class AccountService : IAccountService
             throw new AlreadyExistsException("User with the same email already exists");
         }
         
-        var newUser = new User
+        await using var transaction = await _applicationContext.Database.BeginTransactionAsync();
+        try
         {
-            Email = email,
-            Username = email,
-            IsEmailConfirmed = false,
-            RegisteredAt = DateTimeOffset.UtcNow
-        };
-        _applicationContext.Users.Add(newUser);
-        await _applicationContext.SaveChangesAsync();
-        
-        _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
-        
-        await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
-        return newUser;
+            var newUser = new User
+            {
+                Email = email,
+                Username = email,
+                IsEmailConfirmed = false,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            _applicationContext.Users.Add(newUser);
+            await _applicationContext.SaveChangesAsync();
+
+            await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
+
+            await transaction.CommitAsync();
+            _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
+            return newUser;
+        }
+        catch(Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Encountered exception when registering user. Transaction rolled back");
+            throw;
+        }
     }
 
     public async Task LoginUserAsync(string email)
