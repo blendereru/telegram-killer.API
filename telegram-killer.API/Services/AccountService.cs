@@ -109,7 +109,7 @@ public class AccountService : IAccountService
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
         
-        using var transaction = await _applicationContext.Database.BeginTransactionAsync();
+        await using var transaction = await _applicationContext.Database.BeginTransactionAsync();
         try
         {
             var activeSessions = _applicationContext.RefreshSessions

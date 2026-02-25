@@ -67,6 +67,11 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
         });
     }
 
+    public IServiceScope CreateScope()
+    {
+        return Services.CreateScope();
+    }
+
     public new async Task DisposeAsync()
     {
         await _dbConnection.CloseAsync();
