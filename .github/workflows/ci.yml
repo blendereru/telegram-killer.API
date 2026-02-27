@@ -1,0 +1,38 @@
+name: ci
+on:
+  push: 
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        
+      - name: Dotnet Setup
+        uses:  actions/setup-dotnet@v5
+        with: 
+          dotnet-version: '9.0.x'
+      
+      - name: Docker Setup
+        run: actions/setup-docker-action@v4
+        
+      - name: Pull PostgreSQL image
+        run: docker pull postgres:latest
+        
+      - name: Build Project
+        run: |
+          cd telegram-killer.API
+          dotnet build
+      - name: Run Tests
+        run: |
+          cd ../tests/telegram-killer.API.IntegrationTests
+          dotnet test
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: (!cancelled())
+        with:
+          files: |
+            test-results/**/*.xml
+            test-results/**/*.json
