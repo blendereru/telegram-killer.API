@@ -14,25 +14,17 @@ jobs:
         uses:  actions/setup-dotnet@v5
         with: 
           dotnet-version: '9.0.x'
-      
-      - name: Docker Setup
-        run: actions/setup-docker-action@v4
-        
-      - name: Pull PostgreSQL image
-        run: docker pull postgres:latest
         
       - name: Build Project
-        run: |
-          cd telegram-killer.API
-          dotnet build
+        run: dotnet build telegram-killer.API
+        
       - name: Run Tests
-        run: |
-          cd ../tests/telegram-killer.API.IntegrationTests
-          dotnet test
+        run: dotnet test tests/telegram-killer.API.IntegrationTests \
+          --logger trx \
+          --results-directory test-results
+        
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: (!cancelled())
         with:
-          files: |
-            test-results/**/*.xml
-            test-results/**/*.json
+          files: test-results/**/*.trx
