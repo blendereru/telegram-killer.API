@@ -4,6 +4,10 @@ on:
     branches:
       - main
 
+permissions: 
+  checks: write
+  contents: read
+  
 jobs:
   ci:
     runs-on: ubuntu-22.04
