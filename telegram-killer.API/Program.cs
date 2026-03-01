@@ -6,6 +6,7 @@ using Scalar.AspNetCore;
 using Serilog;
 using telegram_killer.API.Data;
 using telegram_killer.API.Extensions;
+using telegram_killer.API.Hubs;
 using telegram_killer.API.Options;
 using telegram_killer.API.Services;
 using telegram_killer.API.Services.Interfaces;
@@ -13,6 +14,7 @@ using telegram_killer.API.Transformers;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.Configure<JwtConfigurationOptions>(builder.Configuration.GetSection("JwtConfigurationOptions"));
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
@@ -29,7 +31,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         var jwtOptions = builder.Configuration.GetSection("JwtConfigurationOptions").Get<JwtConfigurationOptions>();
         if (jwtOptions == null)
         {
-            throw new Exception("JWT configuration options not found");
+            throw new ApplicationException("JWT configuration options not found");
         }
         
         options.TokenValidationParameters = new TokenValidationParameters
@@ -81,6 +83,7 @@ app.UseProblemDetailsException();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<ChatHub>("/chat");
 app.Run();
 
 public partial class Program { }
