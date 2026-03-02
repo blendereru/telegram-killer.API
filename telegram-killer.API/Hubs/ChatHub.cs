@@ -35,10 +35,10 @@ public class ChatHub : Hub
     {
         var from = Context.UserIdentifier;
         
+        await Clients.User(to).SendAsync("ReceiveMessage", from, message);
+        
         _logger.LogInformation("Message dispatched: From={Sender}, To={Recipient}, Length={Length}", 
             from, to, message.Length);
-        
-        await Clients.User(to).SendAsync("ReceiveMessage", from, message);
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)

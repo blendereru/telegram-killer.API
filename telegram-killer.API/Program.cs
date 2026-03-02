@@ -82,6 +82,7 @@ app.UseSerilogRequestLogging();
 app.UseProblemDetailsException();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseStaticFiles();
 app.MapControllers();
 app.MapHub<ChatHub>("/chat");
 app.Run();

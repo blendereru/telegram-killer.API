@@ -1,0 +1,106 @@
+asyncapi: '3.0.0'
+
+id: urn:telegram-killer:chathub
+
+info:
+  title: ChatHub WebSocket API
+  version: '1.0.0'
+  description: |
+    AsyncAPI specification for the SignalR ChatHub WebSocket API.
+
+    This API enables authenticated users to send direct messages to other users
+    and receive real-time messages via WebSockets.
+  contact:
+    name: API Support
+    email: support@telegram-killer.local
+  license:
+    name: Proprietary
+    url: https://example.com/license
+
+tags:
+  - name: chat
+    description: Real-time messaging endpoints
+
+servers:
+  development:
+    url: ws://localhost:5196/chat
+    protocol: ws
+    description: Local development WebSocket server
+
+defaultContentType: application/json
+
+channels:
+
+  chat.send:
+    description: Channel for sending direct messages to another user.
+    publish:
+      summary: Send a private message to a user.
+      operationId: sendMessage
+      security:
+        - bearerAuth: []
+      message:
+        $ref: '#/components/messages/SendMessage'
+
+  chat.receive:
+    description: Channel for receiving messages sent by other users.
+    subscribe:
+      summary: Receive private messages.
+      operationId: receiveMessage
+      security:
+        - bearerAuth: []
+      message:
+        $ref: '#/components/messages/ReceiveMessage'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token used to authenticate WebSocket connections.
+
+  messages:
+
+    SendMessage:
+      messageId: chat.send
+      name: SendMessage
+      title: Send Message
+      summary: Client sends a message to another user.
+      payload:
+        type: object
+        required:
+          - to
+          - message
+        properties:
+          to:
+            $ref: '#/components/schemas/UserId'
+          message:
+            type: string
+            description: Message content.
+            example: "Hello from SignalR!"
+
+    ReceiveMessage:
+      messageId: chat.receive
+      name: ReceiveMessage
+      title: Receive Message
+      summary: Server delivers a message from another user.
+      payload:
+        type: object
+        required:
+          - from
+          - message
+        properties:
+          from:
+            $ref: '#/components/schemas/UserId'
+          message:
+            type: string
+            description: Message content.
+            example: "Hello back!"
+
+  schemas:
+
+    UserId:
+      type: string
+      description: Unique user identifier.
+      example: "user-123"

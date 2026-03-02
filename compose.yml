@@ -42,7 +42,7 @@ services:
     container_name: seq
     environment:
       - ACCEPT_EULA=Y,
-      - SEQ_FIRSTRUN_ADMINPASSWORD=YOUR_SECURE_PASSWORD
+      - SEQ_FIRSTRUN_ADMINPASSWORD=YOUR_PASSWORD
     ports:
       - "5341:5341"
       - "8082:80"
@@ -50,6 +50,18 @@ services:
       - seq-data:/data
     networks:
       - telegram-killer-network
+  
+  asyncapi-docs:
+    image: asyncapi/cli:latest
+    container_name: asyncapi-docs
+    working_dir: /app
+    volumes:
+      - ./docs:/app
+      - ./telegram-killer.API/wwwroot/docs:/output
+    command: >
+      generate fromTemplate /app/asyncapi.yaml
+      @asyncapi/html-template
+      -o /output
 
 volumes:
   postgres-data:
