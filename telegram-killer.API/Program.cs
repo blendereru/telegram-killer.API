@@ -84,7 +84,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseStaticFiles();
 app.MapControllers();
-app.MapHub<ChatHub>("/chat");
+app.MapHub<ChatHub>("hub/chat");
 app.Run();
 
 public partial class Program { }

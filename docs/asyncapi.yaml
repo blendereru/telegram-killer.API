@@ -1,106 +1,134 @@
-asyncapi: '3.0.0'
-
-id: urn:telegram-killer:chathub
+asyncapi: '2.6.0'
 
 info:
-  title: ChatHub WebSocket API
+  title: ChatHub API
   version: '1.0.0'
   description: |
-    AsyncAPI specification for the SignalR ChatHub WebSocket API.
+    Real-time chat API powered by ASP.NET Core SignalR over WebSockets.
 
-    This API enables authenticated users to send direct messages to other users
-    and receive real-time messages via WebSockets.
-  contact:
-    name: API Support
-    email: support@telegram-killer.local
-  license:
-    name: Proprietary
-    url: https://example.com/license
+    ## Authentication
+    All connections must carry a valid JWT bearer token. Connections that
+    arrive without a resolved UserIdentifier are immediately aborted by the
+    server (Context.Abort()).
 
-tags:
-  - name: chat
-    description: Real-time messaging endpoints
+    ## Connection Lifecycle
+    - OnConnectedAsync: Server validates UserIdentifier. Missing means connection is aborted.
+    - Active: Client may invoke SendMessage; server pushes ReceiveMessage.
+    - OnDisconnectedAsync: Server logs normal or error-caused disconnection.
 
 servers:
   development:
-    url: ws://localhost:5196/chat
+    url: ws://localhost:8080/hub/chat
     protocol: ws
-    description: Local development WebSocket server
-
-defaultContentType: application/json
+    description: Local development ChatHub SignalR endpoint (WS)
+    security:
+      - bearerAuth: []
 
 channels:
-
-  chat.send:
-    description: Channel for sending direct messages to another user.
+  chat/sendMessage:
+    description: |
+      The client invokes this channel to dispatch a private message to another
+      connected user. Maps directly to the SendMessage(string to, string message)
+      hub method. The caller's UserIdentifier is resolved server-side from the JWT
+      claims so the "from" field is not part of the request payload.
     publish:
-      summary: Send a private message to a user.
       operationId: sendMessage
-      security:
-        - bearerAuth: []
+      summary: Send a private message to a specific user
+      tags:
+        - name: messaging
       message:
-        $ref: '#/components/messages/SendMessage'
+        $ref: '#/components/messages/SendMessageRequest'
 
-  chat.receive:
-    description: Channel for receiving messages sent by other users.
+  chat/receiveMessage:
+    description: |
+      The server pushes this event to the target user identified by the "to" field
+      of the originating SendMessage invocation. Maps to the ReceiveMessage
+      client-side handler invoked via Clients.User(to).SendAsync("ReceiveMessage", from, message).
     subscribe:
-      summary: Receive private messages.
       operationId: receiveMessage
-      security:
-        - bearerAuth: []
+      summary: Receive a private message from another user
+      tags:
+        - name: messaging
       message:
-        $ref: '#/components/messages/ReceiveMessage'
+        $ref: '#/components/messages/ReceiveMessageEvent'
 
 components:
+  messages:
+    SendMessageRequest:
+      name: SendMessage
+      title: Send Message Request
+      summary: Payload the client sends when invoking the SendMessage hub method
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SendMessagePayload'
+      examples:
+        - name: BasicMessage
+          summary: A simple text message sent to another user
+          payload:
+            to: "d4f1a2b3-0001-0001-0001-000000000001"
+            message: "Hey, are you free for a call?"
+
+    ReceiveMessageEvent:
+      name: ReceiveMessage
+      title: Receive Message Event
+      summary: Payload the server pushes to the target user
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ReceiveMessagePayload'
+      examples:
+        - name: IncomingMessage
+          summary: A message delivered to the recipient
+          payload:
+            from: "d4f1a2b3-0000-0000-0000-000000000001"
+            message: "Hey, are you free for a call?"
+
+  schemas:
+    SendMessagePayload:
+      type: object
+      required:
+        - to
+        - message
+      additionalProperties: false
+      properties:
+        to:
+          type: string
+          minLength: 1
+          description: >
+            The UserIdentifier of the intended recipient. Must match the
+            NameIdentifier claim value stored in the server connection mapping.
+          example: "d4f1a2b3-0001-0001-0001-000000000001"
+        message:
+          type: string
+          minLength: 1
+          description: Plain-text content of the message to deliver.
+          example: "Hey, are you free for a call?"
+
+    ReceiveMessagePayload:
+      type: object
+      required:
+        - from
+        - message
+      additionalProperties: false
+      properties:
+        from:
+          type: string
+          minLength: 1
+          description: >
+            The UserIdentifier of the sender. Populated server-side from
+            Context.UserIdentifier and cannot be forged by the client.
+          example: "d4f1a2b3-0000-0000-0000-000000000001"
+        message:
+          type: string
+          minLength: 1
+          description: Plain-text content of the received message.
+          example: "Hey, are you free for a call?"
 
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT Bearer token used to authenticate WebSocket connections.
-
-  messages:
-
-    SendMessage:
-      messageId: chat.send
-      name: SendMessage
-      title: Send Message
-      summary: Client sends a message to another user.
-      payload:
-        type: object
-        required:
-          - to
-          - message
-        properties:
-          to:
-            $ref: '#/components/schemas/UserId'
-          message:
-            type: string
-            description: Message content.
-            example: "Hello from SignalR!"
-
-    ReceiveMessage:
-      messageId: chat.receive
-      name: ReceiveMessage
-      title: Receive Message
-      summary: Server delivers a message from another user.
-      payload:
-        type: object
-        required:
-          - from
-          - message
-        properties:
-          from:
-            $ref: '#/components/schemas/UserId'
-          message:
-            type: string
-            description: Message content.
-            example: "Hello back!"
-
-  schemas:
-
-    UserId:
-      type: string
-      description: Unique user identifier.
-      example: "user-123"
+      description: >
+        Standard JWT bearer token. The server resolves Context.UserIdentifier
+        from the token NameIdentifier claim. Connections that do not yield a
+        UserIdentifier are aborted immediately in OnConnectedAsync.
