@@ -42,31 +42,22 @@ public class AccountService : IAccountService
             throw new AlreadyExistsException("User with the same email already exists");
         }
         
-        await using var transaction = await _applicationContext.Database.BeginTransactionAsync();
-        try
+        var newUser = new User
         {
-            var newUser = new User
-            {
-                Email = email,
-                Username = email,
-                IsEmailConfirmed = false,
-                RegisteredAt = DateTimeOffset.UtcNow
-            };
-            _applicationContext.Users.Add(newUser);
-            await _applicationContext.SaveChangesAsync();
-
-            await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
-
-            await transaction.CommitAsync();
-            _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
-            return newUser;
-        }
-        catch(Exception ex)
-        {
-            await transaction.RollbackAsync();
-            _logger.LogError(ex, "Encountered exception when registering user. Transaction rolled back");
-            throw;
-        }
+            Email = email,
+            Username = email,
+            IsEmailConfirmed = false,
+            RegisteredAt = DateTimeOffset.UtcNow
+        };
+        _applicationContext.Users.Add(newUser);
+        
+        await _applicationContext.SaveChangesAsync();
+        
+        _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
+        
+        await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
+        
+        return newUser;
     }
 
     public async Task LoginUserAsync(string email)
@@ -186,6 +177,29 @@ public class AccountService : IAccountService
         _logger.LogInformation("Logout completed successfully. UserId: {UserId}", refreshSession.UserId);
     }
 
+    public async Task<GetUserInformationResponse> GetUserInformationAsync(Guid userId)
+    {
+        var user = await _applicationContext.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new GetUserInformationResponse
+            {
+                Id = u.Id,
+                Email = u.Email
+            })
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+        {
+            _logger.LogWarning("User with Id {UserId} not found", userId);
+            throw new NotFoundException("User doesn't exist");
+        }
+
+        _logger.LogInformation("User information successfully retrieved. UserId: {UserId}", user.Id);
+        
+        return user;
+    }
+    
     private async Task<User> ConfirmEmailAsync(string email, string confirmationCode)
     {
         var code = await _applicationContext.EmailConfirmationCodes

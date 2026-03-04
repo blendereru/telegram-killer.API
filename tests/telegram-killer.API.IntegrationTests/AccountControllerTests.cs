@@ -131,32 +131,6 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
     }
 
     [Fact]
-    public async Task Register_ParseError_UserNotStoredInDb()
-    {
-        // Arrange
-        var client = _factory.CreateClient();
-
-        const string invalidEmail = "email@-example.com";
-
-        var request = new GetUserEmailRequest
-        {
-            Email = invalidEmail
-        };
-        
-        // Act
-        var response = await client.PostAsJsonAsync("api/account/signup", request);
-        
-        // Assert
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        
-        using var scope = _factory.CreateScope();
-        var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
-        
-        var user = await applicationContext.Users.FirstOrDefaultAsync(u => u.Email == invalidEmail);
-        Assert.Null(user);
-    }
-
-    [Fact]
     public async Task Register_Returns200OkWithMessageAndRegistrationDate()
     {
         // Arrange

@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.DTOs.Response_DTOs;
+using telegram_killer.API.Exceptions;
 using telegram_killer.API.Services.Interfaces;
 
 namespace telegram_killer.API.Controllers;
@@ -12,9 +14,11 @@ namespace telegram_killer.API.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly IAccountService _accountService;
-    public AccountController(IAccountService accountService)
+    private readonly ILogger<AccountController> _logger;
+    public AccountController(IAccountService accountService, ILogger<AccountController> logger)
     {
         _accountService = accountService;
+        _logger = logger;
     }
     
     [EndpointSummary("The endpoint needed for registering a user")]
@@ -63,6 +67,7 @@ public class AccountController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
+    [Consumes("application/json")]
     [HttpPost("email/confirm")]
     public async Task<IActionResult> ConfirmEmailAndSignIn(ConfirmEmailRequest request)
     {
@@ -77,6 +82,7 @@ public class AccountController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<AuthResult>(StatusCodes.Status200OK, "application/json")]
+    [Consumes("application/json")]
     [HttpPost("tokens/refresh")]
     public async Task<IActionResult> RefreshTokens(GetRefreshTokenRequest request)
     {
@@ -84,16 +90,40 @@ public class AccountController : ControllerBase
         return Ok(result);
     }
     
-    [EndpointSummary("The endpoint needed to log user out from the system")]
-    [EndpointDescription("Logs out user from the system by deleting his refresh session from db. This requires refresh token in the body")]
+    [EndpointSummary("The endpoint needed to log user out from the system. This requires both access token in the header and refresh token in the body.")]
+    [EndpointDescription("Logs out user from the system by deleting his refresh session from db. This requires access token in the Authorization header and refresh token in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [Consumes("application/json")]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(GetRefreshTokenRequest request) 
     {
         var userId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? Guid.Empty.ToString());
         await _accountService.LogoutAsync(request.RefreshToken, userId);
         return NoContent();
+    }
+    
+    [Authorize]
+    [EndpointSummary("The endpoint needed to retrieve current user's information. Note: this requires user access token in the Authorizatino header")]
+    [EndpointDescription("Retrieves current user's information. This requires user access token in the Authorization header")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<GetUserInformationResponse>(StatusCodes.Status200OK, "application/json")]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMyInformation()
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            _logger.LogWarning("Invalid UserId format in JWT token");
+            throw new UnauthorizedException("Invalid token");
+        }
+        
+        var response = await _accountService.GetUserInformationAsync(userGuid);
+        
+        return Ok(response);
     }
 }
