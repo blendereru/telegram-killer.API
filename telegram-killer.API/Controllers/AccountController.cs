@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.JsonWebTokens;
 using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.Exceptions;
@@ -90,17 +89,26 @@ public class AccountController : ControllerBase
         return Ok(result);
     }
     
+    [Authorize]
     [EndpointSummary("The endpoint needed to log user out from the system. This requires both access token in the header and refresh token in the body.")]
     [EndpointDescription("Logs out user from the system by deleting his refresh session from db. This requires access token in the Authorization header and refresh token in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [Consumes("application/json")]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(GetRefreshTokenRequest request) 
     {
-        var userId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? Guid.Empty.ToString());
-        await _accountService.LogoutAsync(request.RefreshToken, userId);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            _logger.LogWarning("Invalid UserId format in JWT token");
+            throw new UnauthorizedException("Invalid token");
+        }
+        
+        await _accountService.LogoutAsync(request.RefreshToken, userGuid);
         return NoContent();
     }
     

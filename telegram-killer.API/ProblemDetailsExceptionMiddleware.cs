@@ -65,6 +65,11 @@ public sealed class ProblemDetailsExceptionMiddleware
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5";
             problemDetails.Status = StatusCodes.Status404NotFound;
         }
+        else if (exception.GetType() == typeof(UnauthorizedException))
+        {
+            problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.2";
+            problemDetails.Status = StatusCodes.Status401Unauthorized;
+        }
         else if (exception.GetType() == typeof(AlreadyExistsException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10";
