@@ -26,9 +26,9 @@ public class TokensProviderService : ITokensProviderService
 
         var claims = new List<Claim>()
         {
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim("email_confirmed", user.IsEmailConfirmed.ToString())
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new("email_confirmed", user.IsEmailConfirmed.ToString())
         };
         
         var tokenDescriptor = new SecurityTokenDescriptor

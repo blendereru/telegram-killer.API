@@ -33,6 +33,11 @@ public class AccountService : IAccountService
         var existingUser = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (existingUser != null)
         {
+            if (!existingUser.IsEmailConfirmed)
+            {
+                return existingUser;
+            }
+            
             _logger.LogWarning("User registration failed: user with the same email already exists. UserId: {UserId}", existingUser.Id);
             throw new AlreadyExistsException("User with the same email already exists");
         }

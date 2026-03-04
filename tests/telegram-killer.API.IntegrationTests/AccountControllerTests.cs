@@ -40,7 +40,45 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
     }
 
     [Fact]
-    public async Task Register_AlreadyExistingUser_Returns409ConflictWithProblemDetails()
+    public async Task Register_AlreadyExistingUserWithoutEmailConfirmed_Returns200OkWithMessage()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string existingEmail = "example@example.com";
+        using var scope = _factory.CreateScope();
+        var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+        applicationContext.Users.Add(new User
+        {
+            Email = existingEmail,
+            IsEmailConfirmed = false,
+            Username = existingEmail,
+            RegisteredAt = DateTimeOffset.UtcNow
+        });
+        await applicationContext.SaveChangesAsync();
+
+        var request = new GetUserEmailRequest
+        {
+            Email = existingEmail
+        };
+        
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/signup", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
+        var registerUserResponse = await response.Content.ReadFromJsonAsync<RegisterUserResponse>();
+
+        Assert.NotNull(registerUserResponse);
+
+        Assert.Contains("registered", registerUserResponse.Message, StringComparison.OrdinalIgnoreCase);
+    }
+    
+    [Fact]
+    public async Task Register_AlreadyExistingUserWithEmailConfirmed_Returns409ConflictWithProblemDetails()
     {
         // Arrange
         var client = _factory.CreateClient();
