@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Respawn;
 using telegram_killer.API.Data;
+using telegram_killer.API.IntegrationTests.Fakes;
+using telegram_killer.API.Services.Interfaces;
 using Testcontainers.PostgreSql;
 
 namespace telegram_killer.API.IntegrationTests;
@@ -64,6 +66,16 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
             {
                 options.UseNpgsql(_dbContainer.GetConnectionString());
             });
+            
+            var emailSenderServiceDescriptor = services.SingleOrDefault(s => 
+                s.ServiceType == typeof(IEmailSenderService));
+
+            if (emailSenderServiceDescriptor != null)
+            {
+                services.Remove(emailSenderServiceDescriptor);
+            }
+
+            services.AddScoped<IEmailSenderService, FakeEmailSenderService>();
         });
     }
 

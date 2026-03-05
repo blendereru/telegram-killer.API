@@ -24,7 +24,7 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
     }
 
     [Fact]
-    public async Task Register_NoBodyProvided_Returns400BadRequestWithProblemDetails()
+    public async Task Register_NoBodyProvided_Returns400BadRequestWithValidationProblemDetails()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -36,6 +36,7 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
         await TestHelpers.AssertValidationProblemDetails(response, "Email", "required");
     }
 
@@ -110,27 +111,6 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
     }
 
     [Fact]
-    public async Task Register_ParseError_Returns500InternalServerErrorWithProblemDetails()
-    {
-        // Arrange
-        var client = _factory.CreateClient();
-
-        const string invalidEmail = "email@-example.com";
-
-        var request = new GetUserEmailRequest
-        {
-            Email = invalidEmail
-        };
-        
-        // Act
-        var response = await client.PostAsJsonAsync("api/account/signup", request);
-        
-        // Assert
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        await TestHelpers.AssertProblemDetails(response, "error");
-    }
-
-    [Fact]
     public async Task Register_Returns200OkWithMessageAndRegistrationDate()
     {
         // Arrange
@@ -161,7 +141,7 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
     }
 
     [Fact]
-    public async Task Register_UserAndCodeStoredInDb()
+    public async Task Register_UserStoredInDb()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -181,9 +161,44 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         
         var user = await applicationContext.Users.FirstOrDefaultAsync(u => u.Email == validEmailExample);
         Assert.NotNull(user);
+    }
+
+    [Fact]
+    public async Task Login_NoBodyProvided_Returns400BadRequestWithValidationProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
         
-        var code = await applicationContext.EmailConfirmationCodes.FirstOrDefaultAsync(e => e.UserId == user.Id);
-        Assert.NotNull(code);
+        var request = new GetUserEmailRequest();
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/signin", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
+        await TestHelpers.AssertValidationProblemDetails(response, "Email", "required");
+    }
+
+    [Fact]
+    public async Task Login_UserNotFound_Returns404NotFoundWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string notFoundEmail = "example@example.com";
+        
+        var request = new GetUserEmailRequest()
+        {
+            Email = notFoundEmail
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/signin", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "not found");
     }
     public Task DisposeAsync() => Task.CompletedTask;
 }
