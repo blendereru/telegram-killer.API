@@ -200,5 +200,6 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await TestHelpers.AssertProblemDetails(response, "not found");
     }
+    
     public Task DisposeAsync() => Task.CompletedTask;
 }
