@@ -75,8 +75,6 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
                 services.Remove(emailSenderServiceDescriptor);
             }
             services.AddScoped<IEmailSenderService, FakeEmailSenderService>();
-
-            builder.UseEnvironment("Development");
         });
     }
 
