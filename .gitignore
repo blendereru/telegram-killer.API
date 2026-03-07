@@ -105,4 +105,3 @@ packages/
 .idea/dictionaries
 .idea/workspace.xml
 *.dockerignore
-appsettings.json

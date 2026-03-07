@@ -82,6 +82,7 @@ public sealed class ProblemDetailsExceptionMiddleware
         }
         else
         {
+            problemDetails.Title = "An error occured while processing you request";
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.1";
             problemDetails.Status = StatusCodes.Status500InternalServerError;
         }
