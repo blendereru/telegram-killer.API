@@ -23,7 +23,7 @@ jobs:
         run: dotnet build telegram-killer.API
         
       - name: Run Tests
-        run: dotnet test tests/telegram-killer.API.IntegrationTests --logger trx --results-directory test-results --verbosity detailed
+        run: dotnet test tests/telegram-killer.API.IntegrationTests --logger trx --results-directory test-results --verbosity diagnostic
         
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
