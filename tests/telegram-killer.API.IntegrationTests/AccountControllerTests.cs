@@ -7,15 +7,19 @@ using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.IntegrationTests.Helpers;
 using telegram_killer.API.Models;
+using Xunit.Abstractions;
 
 namespace telegram_killer.API.IntegrationTests;
 
 public class AccountControllerTests : IClassFixture<TelegramKillerWebApplicationFactory>, IAsyncLifetime
 {
     private readonly TelegramKillerWebApplicationFactory _factory;
-    public AccountControllerTests(TelegramKillerWebApplicationFactory factory)
+    private readonly ITestOutputHelper _testOutputHelper;
+
+    public AccountControllerTests(TelegramKillerWebApplicationFactory factory, ITestOutputHelper testOutputHelper)
     {
         _factory = factory;
+        _testOutputHelper = testOutputHelper;
     }
 
     public async Task InitializeAsync()
@@ -35,6 +39,10 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         var response = await client.PostAsJsonAsync("api/account/signup", request);
         
         // Assert
+        var body = await response.Content.ReadAsStringAsync();
+        
+        _testOutputHelper.WriteLine(body);
+        
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         
         await TestHelpers.AssertValidationProblemDetails(response, "Email", "required");
