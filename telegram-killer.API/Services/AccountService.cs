@@ -207,7 +207,34 @@ public class AccountService : IAccountService
         
         return user;
     }
-    
+
+    public async Task<GetUserInformationResponse> GetUserInformationAsync(Guid requesterId, string email)
+    {
+        var requester = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Id == requesterId);
+
+        if (requester == null)
+        {
+            _logger.LogWarning("User information retrieve failed: Requester with Id {RequesterId} not found", requesterId);
+            throw new UnauthorizedException("You are not authorized to perform this action");
+        }
+        
+        var requested =  await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (requested == null)
+        {
+            _logger.LogWarning("User information retrieve failed: Requested user email not found. RequesterId: {RequesterId}", requester.Id);
+            throw new NotFoundException("User with the specified email not found.");
+        }
+        
+        _logger.LogInformation("User information successfully retrieved. RequesterId: {RequesterId}, RequestedId: {RequestedId}", requester.Id, requested.Id);
+
+        return new GetUserInformationResponse
+        {
+            Id = requested.Id,
+            Email = requested.Email
+        };
+    }
+
     private async Task<User> ConfirmEmailAsync(string email, string confirmationCode)
     {
         var code = await _applicationContext.EmailConfirmationCodes

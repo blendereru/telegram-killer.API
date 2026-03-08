@@ -134,4 +134,27 @@ public class AccountController : ControllerBase
         
         return Ok(response);
     }
+
+    [Authorize]
+    [EndpointSummary("The endpoint needed to retrieve user information based on email. User requesting to retrieve information should be authorized")]
+    [EndpointDescription("The endpoint needed to retrieve user information based on email. User requesting to retrieve information should be authorized(e.g. Provide access token in Authorization header)")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType<GetUserInformationResponse>(StatusCodes.Status200OK, "application/json")]
+    [HttpGet("{email}")]
+    public async Task<IActionResult> GetUserInformation([FromQuery] string email)
+    {
+        var requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (!Guid.TryParse(requesterId, out var requesterGuid))
+        {
+            _logger.LogWarning("Invalid UserId format in JWT token");
+            throw new UnauthorizedException("Invalid token");
+        }
+        
+        var response = await _accountService.GetUserInformationAsync(requesterGuid, email);
+        
+        return Ok(response);
+    }
 }

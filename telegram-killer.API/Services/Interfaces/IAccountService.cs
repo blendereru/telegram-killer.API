@@ -11,4 +11,5 @@ public interface IAccountService
     Task<AuthResult> RefreshTokensAsync(string refreshToken);
     Task LogoutAsync(string refreshToken, Guid userId);
     Task<GetUserInformationResponse> GetUserInformationAsync(Guid userId);
+    Task<GetUserInformationResponse> GetUserInformationAsync(Guid requesterId, string email);
 }
