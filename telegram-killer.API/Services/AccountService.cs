@@ -88,20 +88,28 @@ public class AccountService : IAccountService
         
         if (refreshSession == null || refreshSession.ExpiresAt < DateTimeOffset.UtcNow)
         {
-            _logger.LogWarning("Refresh failed: token expired or not found.");
+            _logger.LogWarning("Refresh tokens failed: token expired or not found.");
             throw new UnauthorizedException("Invalid session.");
+        }
+
+        var user = refreshSession.User;
+
+        if (!user.IsEmailConfirmed)
+        {
+            _logger.LogWarning("Refresh tokens failed: User email is not confirmed. UserId: {UserId}", user.Id);
+            throw new EmailNotConfirmedException("Email address must be verified before refreshing tokens.");
         }
         
         var currentIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
         if (refreshSession.Ip != currentIp)
         {
-            _logger.LogWarning("IP mismatch for User: {UserId}", refreshSession.UserId);
+            _logger.LogWarning("Refresh tokens failed: IP mismatch for User: {UserId}", refreshSession.UserId);
             throw new UnauthorizedException("Invalid session.");
         }
         
         var authResult = new AuthResult
         {
-            AccessToken = _tokensProviderService.GenerateAccessToken(refreshSession.User),
+            AccessToken = _tokensProviderService.GenerateAccessToken(user),
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
         
@@ -115,7 +123,7 @@ public class AccountService : IAccountService
 
             if (sessionCount >= 5)
             {
-                _logger.LogInformation("Session limit reached. Nuking all sessions for User: {UserId}", refreshSession.UserId);
+                _logger.LogInformation("Session limit reached during tokens refresh. Nuking all sessions for User: {UserId}", refreshSession.UserId);
                 _applicationContext.RefreshSessions.RemoveRange(activeSessions);
             }
             else

@@ -75,7 +75,7 @@ public sealed class ProblemDetailsExceptionMiddleware
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10";
             problemDetails.Status = StatusCodes.Status409Conflict;
         }
-        else if (exception.GetType() == typeof(ForbiddenException))
+        else if (exception.GetType() == typeof(ForbiddenException) || exception.GetType() == typeof(EmailNotConfirmedException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.4";
             problemDetails.Status = StatusCodes.Status403Forbidden;

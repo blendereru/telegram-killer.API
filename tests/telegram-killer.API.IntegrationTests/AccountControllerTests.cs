@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -690,6 +691,115 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
             Assert.NotNull(session);
             Assert.Equal(authResult.RefreshToken, session.RefreshToken);
         }
+    }
+
+    [Fact]
+    public async Task RefreshTokens_NoRefreshTokenProvided_Returns400BadRequestWithValidationProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        var request = new GetRefreshTokenRequest();
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
+        await TestHelpers.AssertValidationProblemDetails(response, "RefreshToken", "required");
+    }
+    
+    [Fact]
+    public async Task RefreshTokens_NonExistentRefreshToken_Returns401UnauthorizedWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string userEmail = "user@example.com";
+        var nonExistentRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+        }
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = nonExistentRefreshToken
+        };
+            
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "invalid");
+    }
+
+    [Fact]
+    public async Task RefreshTokens_EmailNotConfirmed_Returns403ForbiddenWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string userEmail = "user@example.com";
+        var userRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        const string userIp = "192.0.2.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+        const int expirationTimeInDays = 7;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            var refreshSession = new RefreshSession
+            {
+                UserId = user.Id,
+                RefreshToken = userRefreshToken,
+                Ip = userIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(expirationTimeInDays)
+            };
+            
+            context.RefreshSessions.Add(refreshSession);
+            await context.SaveChangesAsync();
+        }
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = userRefreshToken
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "must be verified");
     }
     
     public Task DisposeAsync() => Task.CompletedTask;
