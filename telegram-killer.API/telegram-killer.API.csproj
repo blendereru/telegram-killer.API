@@ -29,4 +29,12 @@
       <PackageReference Include="Serilog.Sinks.Seq" Version="9.0.0" />
       <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.6" />
     </ItemGroup>
+    
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="wwwroot\css\asyncapi.min.css" />
+      <_ContentIncludedByDefault Remove="wwwroot\css\global.min.css" />
+      <_ContentIncludedByDefault Remove="wwwroot\index.html" />
+      <_ContentIncludedByDefault Remove="wwwroot\js\app.js" />
+      <_ContentIncludedByDefault Remove="wwwroot\js\asyncapi-ui.min.js" />
+    </ItemGroup>
 </Project>

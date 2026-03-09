@@ -3,8 +3,8 @@
   "asyncapi": "2.6.0",
   "info": {
     "title": "ChatHub API",
-    "version": "1.0.0",
-    "description": "Real-time chat API powered by ASP.NET Core SignalR over WebSockets.\n\n## Authentication\nAll connections must carry a valid JWT bearer token. Connections that\narrive without a resolved UserIdentifier are immediately aborted by the\nserver (Context.Abort()).\n\n## Connection Lifecycle\n- OnConnectedAsync: Server validates UserIdentifier. Missing means connection is aborted.\n- Active: Client may invoke SendMessage; server pushes ReceiveMessage.\n- OnDisconnectedAsync: Server logs normal or error-caused disconnection.\n"
+    "version": "2.0.0",
+    "description": "Real-time chat API powered by ASP.NET Core SignalR over WebSockets.\n\n## Authentication\nAll connections must carry a valid JWT bearer token. Connections that\narrive without a resolved UserIdentifier are immediately aborted by the\nserver (Context.Abort()).\n\n## Connection Lifecycle\n- OnConnectedAsync: Server validates UserIdentifier; missing aborts connection.\n- Active: Client may invoke JoinChat or SendMessage; server pushes ReceiveMessage.\n- OnDisconnectedAsync: Server logs normal or error-caused disconnection.\n"
   },
   "servers": {
     "development": {
@@ -19,11 +19,55 @@
     }
   },
   "channels": {
+    "chat/joinChat": {
+      "description": "Client invokes this channel to join a chat group. Maps directly to\n`JoinChat(string chatId)` hub method.\n",
+      "publish": {
+        "operationId": "joinChat",
+        "summary": "Join a chat group",
+        "tags": [
+          {
+            "name": "group"
+          }
+        ],
+        "message": {
+          "name": "JoinChat",
+          "title": "Join Chat Request",
+          "summary": "Payload the client sends to join a chat group",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "required": [
+              "chatId"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "chatId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The chat group identifier to join (GUID).",
+                "example": "d4f1a2b3-1000-0000-0000-000000000001",
+                "x-parser-schema-id": "<anonymous-schema-1>"
+              }
+            },
+            "x-parser-schema-id": "JoinChatPayload"
+          },
+          "examples": [
+            {
+              "name": "JoinGeneralChat",
+              "summary": "Join a chat group",
+              "payload": {
+                "chatId": "d4f1a2b3-1000-0000-0000-000000000001"
+              }
+            }
+          ]
+        }
+      }
+    },
     "chat/sendMessage": {
-      "description": "The client invokes this channel to dispatch a private message to another\nconnected user. Maps directly to the SendMessage(string to, string message)\nhub method. The caller's UserIdentifier is resolved server-side from the JWT\nclaims so the \"from\" field is not part of the request payload.\n",
+      "description": "Client invokes this channel to dispatch a message to a chat group.\nMaps to `SendMessage(string chatId, string content)` hub method.\nThe caller's UserIdentifier is resolved server-side.\n",
       "publish": {
         "operationId": "sendMessage",
-        "summary": "Send a private message to a specific user",
+        "summary": "Send a message to a chat group",
         "tags": [
           {
             "name": "messaging"
@@ -37,35 +81,35 @@
           "payload": {
             "type": "object",
             "required": [
-              "to",
-              "message"
+              "chatId",
+              "content"
             ],
             "additionalProperties": false,
             "properties": {
-              "to": {
+              "chatId": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The UserIdentifier of the intended recipient. Must match the NameIdentifier claim value stored in the server connection mapping.\n",
-                "example": "d4f1a2b3-0001-0001-0001-000000000001",
-                "x-parser-schema-id": "<anonymous-schema-1>"
-              },
-              "message": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Plain-text content of the message to deliver.",
-                "example": "Hey, are you free for a call?",
+                "description": "The chat group identifier (GUID) to send the message to.",
+                "example": "d4f1a2b3-1000-0000-0000-000000000001",
                 "x-parser-schema-id": "<anonymous-schema-2>"
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The plain-text content of the message.",
+                "example": "Hello everyone!",
+                "x-parser-schema-id": "<anonymous-schema-3>"
               }
             },
             "x-parser-schema-id": "SendMessagePayload"
           },
           "examples": [
             {
-              "name": "BasicMessage",
-              "summary": "A simple text message sent to another user",
+              "name": "TextMessage",
+              "summary": "Send a text message to a chat group",
               "payload": {
-                "to": "d4f1a2b3-0001-0001-0001-000000000001",
-                "message": "Hey, are you free for a call?"
+                "chatId": "d4f1a2b3-1000-0000-0000-000000000001",
+                "content": "Hello everyone!"
               }
             }
           ]
@@ -73,10 +117,10 @@
       }
     },
     "chat/receiveMessage": {
-      "description": "The server pushes this event to the target user identified by the \"to\" field\nof the originating SendMessage invocation. Maps to the ReceiveMessage\nclient-side handler invoked via Clients.User(to).SendAsync(\"ReceiveMessage\", from, message).\n",
+      "description": "Server pushes this event to all members of a chat group when a message\nis sent via `SendMessage`.\n",
       "subscribe": {
         "operationId": "receiveMessage",
-        "summary": "Receive a private message from another user",
+        "summary": "Receive a message from a chat group",
         "tags": [
           {
             "name": "messaging"
@@ -85,29 +129,49 @@
         "message": {
           "name": "ReceiveMessage",
           "title": "Receive Message Event",
-          "summary": "Payload the server pushes to the target user",
+          "summary": "Payload the server pushes to the chat group",
           "contentType": "application/json",
           "payload": {
             "type": "object",
             "required": [
-              "from",
-              "message"
+              "id",
+              "chatId",
+              "senderId",
+              "content",
+              "sentAt"
             ],
             "additionalProperties": false,
             "properties": {
-              "from": {
+              "id": {
                 "type": "string",
-                "minLength": 1,
-                "description": "The UserIdentifier of the sender. Populated server-side from Context.UserIdentifier and cannot be forged by the client.\n",
-                "example": "d4f1a2b3-0000-0000-0000-000000000001",
-                "x-parser-schema-id": "<anonymous-schema-3>"
-              },
-              "message": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Plain-text content of the received message.",
-                "example": "Hey, are you free for a call?",
+                "description": "Unique identifier of the message.",
+                "example": "f1a2b3c4-0000-0000-0000-000000000001",
                 "x-parser-schema-id": "<anonymous-schema-4>"
+              },
+              "chatId": {
+                "type": "string",
+                "description": "The chat group identifier.",
+                "example": "d4f1a2b3-1000-0000-0000-000000000001",
+                "x-parser-schema-id": "<anonymous-schema-5>"
+              },
+              "senderId": {
+                "type": "string",
+                "description": "The sender's UserIdentifier resolved server-side.",
+                "example": "d4f1a2b3-0000-0000-0000-000000000001",
+                "x-parser-schema-id": "<anonymous-schema-6>"
+              },
+              "content": {
+                "type": "string",
+                "description": "The plain-text message content.",
+                "example": "Hello everyone!",
+                "x-parser-schema-id": "<anonymous-schema-7>"
+              },
+              "sentAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "UTC timestamp when the message was sent.",
+                "example": "2026-03-09T12:00:00Z",
+                "x-parser-schema-id": "<anonymous-schema-8>"
               }
             },
             "x-parser-schema-id": "ReceiveMessagePayload"
@@ -115,10 +179,13 @@
           "examples": [
             {
               "name": "IncomingMessage",
-              "summary": "A message delivered to the recipient",
+              "summary": "Message delivered to the chat group",
               "payload": {
-                "from": "d4f1a2b3-0000-0000-0000-000000000001",
-                "message": "Hey, are you free for a call?"
+                "id": "f1a2b3c4-0000-0000-0000-000000000001",
+                "chatId": "d4f1a2b3-1000-0000-0000-000000000001",
+                "senderId": "d4f1a2b3-0000-0000-0000-000000000001",
+                "content": "Hello everyone!",
+                "sentAt": "2026-03-09T12:00:00Z"
               }
             }
           ]
@@ -128,10 +195,12 @@
   },
   "components": {
     "messages": {
+      "JoinChatRequest": "$ref:$.channels.chat/joinChat.publish.message",
       "SendMessageRequest": "$ref:$.channels.chat/sendMessage.publish.message",
       "ReceiveMessageEvent": "$ref:$.channels.chat/receiveMessage.subscribe.message"
     },
     "schemas": {
+      "JoinChatPayload": "$ref:$.channels.chat/joinChat.publish.message.payload",
       "SendMessagePayload": "$ref:$.channels.chat/sendMessage.publish.message.payload",
       "ReceiveMessagePayload": "$ref:$.channels.chat/receiveMessage.subscribe.message.payload"
     },
@@ -140,7 +209,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Standard JWT bearer token. The server resolves Context.UserIdentifier from the token NameIdentifier claim. Connections that do not yield a UserIdentifier are aborted immediately in OnConnectedAsync.\n"
+        "description": "Standard JWT bearer token. Connections without a resolved UserIdentifier are aborted immediately in OnConnectedAsync.\n"
       }
     }
   },

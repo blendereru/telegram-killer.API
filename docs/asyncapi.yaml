@@ -1,8 +1,7 @@
 asyncapi: '2.6.0'
-
 info:
   title: ChatHub API
-  version: '1.0.0'
+  version: '2.0.0'
   description: |
     Real-time chat API powered by ASP.NET Core SignalR over WebSockets.
 
@@ -12,8 +11,8 @@ info:
     server (Context.Abort()).
 
     ## Connection Lifecycle
-    - OnConnectedAsync: Server validates UserIdentifier. Missing means connection is aborted.
-    - Active: Client may invoke SendMessage; server pushes ReceiveMessage.
+    - OnConnectedAsync: Server validates UserIdentifier; missing aborts connection.
+    - Active: Client may invoke JoinChat or SendMessage; server pushes ReceiveMessage.
     - OnDisconnectedAsync: Server logs normal or error-caused disconnection.
 
 servers:
@@ -25,15 +24,26 @@ servers:
       - bearerAuth: []
 
 channels:
+  chat/joinChat:
+    description: |
+      Client invokes this channel to join a chat group. Maps directly to
+      `JoinChat(string chatId)` hub method.
+    publish:
+      operationId: joinChat
+      summary: Join a chat group
+      tags:
+        - name: group
+      message:
+        $ref: '#/components/messages/JoinChatRequest'
+
   chat/sendMessage:
     description: |
-      The client invokes this channel to dispatch a private message to another
-      connected user. Maps directly to the SendMessage(string to, string message)
-      hub method. The caller's UserIdentifier is resolved server-side from the JWT
-      claims so the "from" field is not part of the request payload.
+      Client invokes this channel to dispatch a message to a chat group.
+      Maps to `SendMessage(string chatId, string content)` hub method.
+      The caller's UserIdentifier is resolved server-side.
     publish:
       operationId: sendMessage
-      summary: Send a private message to a specific user
+      summary: Send a message to a chat group
       tags:
         - name: messaging
       message:
@@ -41,12 +51,11 @@ channels:
 
   chat/receiveMessage:
     description: |
-      The server pushes this event to the target user identified by the "to" field
-      of the originating SendMessage invocation. Maps to the ReceiveMessage
-      client-side handler invoked via Clients.User(to).SendAsync("ReceiveMessage", from, message).
+      Server pushes this event to all members of a chat group when a message
+      is sent via `SendMessage`.
     subscribe:
       operationId: receiveMessage
-      summary: Receive a private message from another user
+      summary: Receive a message from a chat group
       tags:
         - name: messaging
       message:
@@ -54,6 +63,19 @@ channels:
 
 components:
   messages:
+    JoinChatRequest:
+      name: JoinChat
+      title: Join Chat Request
+      summary: Payload the client sends to join a chat group
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/JoinChatPayload'
+      examples:
+        - name: JoinGeneralChat
+          summary: Join a chat group
+          payload:
+            chatId: "d4f1a2b3-1000-0000-0000-000000000001"
+
     SendMessageRequest:
       name: SendMessage
       title: Send Message Request
@@ -62,66 +84,91 @@ components:
       payload:
         $ref: '#/components/schemas/SendMessagePayload'
       examples:
-        - name: BasicMessage
-          summary: A simple text message sent to another user
+        - name: TextMessage
+          summary: Send a text message to a chat group
           payload:
-            to: "d4f1a2b3-0001-0001-0001-000000000001"
-            message: "Hey, are you free for a call?"
+            chatId: "d4f1a2b3-1000-0000-0000-000000000001"
+            content: "Hello everyone!"
 
     ReceiveMessageEvent:
       name: ReceiveMessage
       title: Receive Message Event
-      summary: Payload the server pushes to the target user
+      summary: Payload the server pushes to the chat group
       contentType: application/json
       payload:
         $ref: '#/components/schemas/ReceiveMessagePayload'
       examples:
         - name: IncomingMessage
-          summary: A message delivered to the recipient
+          summary: Message delivered to the chat group
           payload:
-            from: "d4f1a2b3-0000-0000-0000-000000000001"
-            message: "Hey, are you free for a call?"
+            id: "f1a2b3c4-0000-0000-0000-000000000001"
+            chatId: "d4f1a2b3-1000-0000-0000-000000000001"
+            senderId: "d4f1a2b3-0000-0000-0000-000000000001"
+            content: "Hello everyone!"
+            sentAt: "2026-03-09T12:00:00Z"
 
   schemas:
+    JoinChatPayload:
+      type: object
+      required:
+        - chatId
+      additionalProperties: false
+      properties:
+        chatId:
+          type: string
+          minLength: 1
+          description: The chat group identifier to join (GUID).
+          example: "d4f1a2b3-1000-0000-0000-000000000001"
+
     SendMessagePayload:
       type: object
       required:
-        - to
-        - message
+        - chatId
+        - content
       additionalProperties: false
       properties:
-        to:
+        chatId:
           type: string
           minLength: 1
-          description: >
-            The UserIdentifier of the intended recipient. Must match the
-            NameIdentifier claim value stored in the server connection mapping.
-          example: "d4f1a2b3-0001-0001-0001-000000000001"
-        message:
+          description: The chat group identifier (GUID) to send the message to.
+          example: "d4f1a2b3-1000-0000-0000-000000000001"
+        content:
           type: string
           minLength: 1
-          description: Plain-text content of the message to deliver.
-          example: "Hey, are you free for a call?"
+          description: The plain-text content of the message.
+          example: "Hello everyone!"
 
     ReceiveMessagePayload:
       type: object
       required:
-        - from
-        - message
+        - id
+        - chatId
+        - senderId
+        - content
+        - sentAt
       additionalProperties: false
       properties:
-        from:
+        id:
           type: string
-          minLength: 1
-          description: >
-            The UserIdentifier of the sender. Populated server-side from
-            Context.UserIdentifier and cannot be forged by the client.
+          description: Unique identifier of the message.
+          example: "f1a2b3c4-0000-0000-0000-000000000001"
+        chatId:
+          type: string
+          description: The chat group identifier.
+          example: "d4f1a2b3-1000-0000-0000-000000000001"
+        senderId:
+          type: string
+          description: The sender's UserIdentifier resolved server-side.
           example: "d4f1a2b3-0000-0000-0000-000000000001"
-        message:
+        content:
           type: string
-          minLength: 1
-          description: Plain-text content of the received message.
-          example: "Hey, are you free for a call?"
+          description: The plain-text message content.
+          example: "Hello everyone!"
+        sentAt:
+          type: string
+          format: date-time
+          description: UTC timestamp when the message was sent.
+          example: "2026-03-09T12:00:00Z"
 
   securitySchemes:
     bearerAuth:
@@ -129,6 +176,5 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: >
-        Standard JWT bearer token. The server resolves Context.UserIdentifier
-        from the token NameIdentifier claim. Connections that do not yield a
-        UserIdentifier are aborted immediately in OnConnectedAsync.
+        Standard JWT bearer token. Connections without a resolved UserIdentifier
+        are aborted immediately in OnConnectedAsync.
