@@ -1,17 +1,17 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using telegram_killer.API.Data;
+using telegram_killer.API.Services.Interfaces;
 
 namespace telegram_killer.API.Hubs;
 
 [Authorize]
 public class ChatHub : Hub
 {
-    private readonly ApplicationContext _applicationContext;
+    private readonly IChatService _chatService;
     private readonly ILogger<ChatHub> _logger;
-    public ChatHub(ApplicationContext applicationContext, ILogger<ChatHub> logger)
+    public ChatHub(IChatService chatService, ILogger<ChatHub> logger)
     {
-        _applicationContext = applicationContext;
+        _chatService = chatService;
         _logger = logger;
     }
     
@@ -34,14 +34,43 @@ public class ChatHub : Hub
         return base.OnConnectedAsync();
     }
 
-    public async Task SendMessage(string to, string message)
+    public async Task JoinChat(string chatId)
     {
-        var from = Context.UserIdentifier;
-        
-        await Clients.User(to).SendAsync("ReceiveMessage", from, message);
-        
-        _logger.LogInformation("Message dispatched: From={Sender}, To={Recipient}, Length={Length}", 
-            from, to, message.Length);
+        _logger.LogInformation("User with Id {UserId} joined chat {ChatId}", Context.UserIdentifier, chatId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, chatId);
+    }
+    
+    public async Task SendMessage(string chatId, string content)
+    {
+        if (!Guid.TryParse(Context.UserIdentifier, out var senderId))
+        {
+            throw new HubException("Invalid user identifier.");
+        }
+
+        if (!Guid.TryParse(chatId, out var chatGuid))
+        {
+            throw new HubException("Invalid chat id.");
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new HubException("Message cannot be empty.");
+        }
+
+        var message = await _chatService.StoreMessageAsync(chatGuid, senderId, content);
+
+        await Clients.Group(chatId).SendAsync("ReceiveMessage", new
+        {
+            message.Id,
+            message.ChatId,
+            message.SenderId,
+            message.Content,
+            message.SentAt
+        });
+
+        _logger.LogInformation(
+            "Message dispatched: ChatId={ChatId} From={Sender} Length={Length}",
+            chatId, senderId, content.Length);
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)

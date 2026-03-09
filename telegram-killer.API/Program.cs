@@ -68,6 +68,7 @@ builder.Services.AddSingleton<IHasherService, HasherService>();
 builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ITokensProviderService, TokensProviderService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 var app = builder.Build();
 using var scope = app.Services.CreateScope();
 var serviceProvider = scope.ServiceProvider;
