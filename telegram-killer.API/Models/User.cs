@@ -7,4 +7,5 @@ public class User
     public string Email { get; set; }
     public bool IsEmailConfirmed { get; set; }
     public DateTimeOffset RegisteredAt { get; set; }
+    public IList<Chat> Chats { get; set; } = new List<Chat>();
 }

@@ -1,14 +1,17 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using telegram_killer.API.Data;
 
 namespace telegram_killer.API.Hubs;
 
 [Authorize]
 public class ChatHub : Hub
 {
+    private readonly ApplicationContext _applicationContext;
     private readonly ILogger<ChatHub> _logger;
-    public ChatHub(ILogger<ChatHub> logger)
+    public ChatHub(ApplicationContext applicationContext, ILogger<ChatHub> logger)
     {
+        _applicationContext = applicationContext;
         _logger = logger;
     }
     

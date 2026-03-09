@@ -210,7 +210,9 @@ public class AccountService : IAccountService
 
     public async Task<GetUserInformationResponse> GetUserInformationAsync(Guid requesterId, string email)
     {
-        var requester = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Id == requesterId);
+        var requester = await _applicationContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == requesterId);
 
         if (requester == null)
         {
@@ -218,7 +220,9 @@ public class AccountService : IAccountService
             throw new UnauthorizedException("You are not authorized to perform this action");
         }
         
-        var requested =  await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+        var requested =  await _applicationContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Email == email);
 
         if (requested == null)
         {
