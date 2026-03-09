@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using telegram_killer.API.DTOs.Request_DTOs;
 using telegram_killer.API.DTOs.Response_DTOs;
+using telegram_killer.API.Exceptions;
 using telegram_killer.API.Services.Interfaces;
 
 namespace telegram_killer.API.Controllers;
@@ -45,5 +46,26 @@ public class ChatController : ControllerBase
         return Created(location, chatResponse);
     }
 
-    
+    [Authorize]
+    [EndpointSummary("Retrieve messages for a specific chat")]
+    [EndpointDescription("Returns all messages belonging to the specified chat")]
+    [ProducesResponseType<List<MessageDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [HttpGet]
+    public async Task<IActionResult> GetMessages([FromQuery, Required] Guid chatId)
+    {
+        var userIdClaim = User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            // log this action later...
+            throw new UnauthorizedException("Invalid token");
+        }
+
+        var messages = await _chatService.GetMessagesAsync(chatId, userId);
+
+        return Ok(messages);
+    }
 }
