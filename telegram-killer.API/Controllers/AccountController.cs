@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -113,7 +114,7 @@ public class AccountController : ControllerBase
     }
     
     [Authorize]
-    [EndpointSummary("The endpoint needed to retrieve current user's information. Note: this requires user access token in the Authorizatino header")]
+    [EndpointSummary("The endpoint needed to retrieve current user's information. Note: this requires user access token in the Authorization header")]
     [EndpointDescription("Retrieves current user's information. This requires user access token in the Authorization header")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
@@ -142,8 +143,8 @@ public class AccountController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<GetUserInformationResponse>(StatusCodes.Status200OK, "application/json")]
-    [HttpGet("{email}")]
-    public async Task<IActionResult> GetUserInformation([FromQuery] string email)
+    [HttpGet]
+    public async Task<IActionResult> GetUserInformation([FromQuery, Required] string email)
     {
         var requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         
