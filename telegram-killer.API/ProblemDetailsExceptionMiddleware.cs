@@ -1,3 +1,5 @@
+using System.Collections;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using telegram_killer.API.Exceptions;
 
@@ -58,6 +60,38 @@ public sealed class ProblemDetailsExceptionMiddleware
 
     private void DecorateProblemDetails(ProblemDetails problemDetails, Exception exception)
     {
+        if (exception.GetType() == typeof(ValidationException))
+        {
+            var errors = new Dictionary<string, string[]>();
+
+            foreach (DictionaryEntry entry in exception.Data)
+            {
+                var key = entry.Key.ToString();
+
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                if (entry.Value is string singleError)
+                {
+                    errors[key] = new[] { singleError };
+                }
+                else if (entry.Value is IEnumerable<string> multipleErrors)
+                {
+                    errors[key] = multipleErrors.ToArray();
+                }
+            }
+
+            problemDetails.Extensions["errors"] = errors;
+
+            problemDetails.Title = "One or more validation errors occurred.";
+            problemDetails.Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1";
+            problemDetails.Status = StatusCodes.Status400BadRequest;
+
+            return;
+        }
+        
         problemDetails.Title = exception.Message;
         
         if (exception.GetType() == typeof(NotFoundException))

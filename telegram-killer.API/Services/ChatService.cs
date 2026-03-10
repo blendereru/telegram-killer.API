@@ -24,7 +24,9 @@ public class ChatService : IChatService
         if (userA == userB)
         {
             _logger.LogWarning("Initiated chat creation with yourself. UserId: {UserId}", userA);
-            throw new ValidationException("Cannot create a chat with yourself"); // handle it later.
+            var exception = new ValidationException("Cannot create a chat with yourself");
+            exception.Data["UserA"] = "UserA id shouldn't be equal to UserB";
+            throw exception;
         }
         
         var existingChat = await _applicationContext.Chats
@@ -35,7 +37,6 @@ public class ChatService : IChatService
 
         if (existingChat != null)
         {
-            
             _logger.LogInformation("Chat creation discarded: Chat with the user already exists. ChatId: {ChatId}", existingChat.Id);
             return existingChat;
         }

@@ -15,9 +15,12 @@ namespace telegram_killer.API.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly IChatService _chatService;
-    public ChatController(IChatService chatService)
+    private readonly ILogger<ChatController> _logger;
+    
+    public ChatController(IChatService chatService, ILogger<ChatController> logger)
     {
         _chatService = chatService;
+        _logger = logger;
     }
     
     [EndpointSummary("This endpoint is needed to create a chat with user")]
@@ -30,9 +33,15 @@ public class ChatController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateChatRequest request)
     {
-        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-
-        var chat = await _chatService.CreateDirectChatAsync(userId, request.OtherUserId);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            _logger.LogWarning("Invalid UserId format in JWT token");
+            throw new UnauthorizedException("Invalid token");
+        }
+        
+        var chat = await _chatService.CreateDirectChatAsync(userGuid, request.OtherUserId);
 
         var chatResponse = new CreateChatResponse
         {
@@ -53,18 +62,18 @@ public class ChatController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [HttpGet]
-    public async Task<IActionResult> GetMessages([FromQuery, Required] Guid chatId)
+    [HttpGet("{chatId:guid}/messages")]
+    public async Task<IActionResult> GetMessages([Required] Guid chatId)
     {
-        var userIdClaim = User.FindFirst("sub")?.Value;
-
-        if (!Guid.TryParse(userIdClaim, out var userId))
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        
+        if (!Guid.TryParse(userId, out var userGuid))
         {
-            // log this action later...
+            _logger.LogWarning("Invalid UserId format in JWT token");
             throw new UnauthorizedException("Invalid token");
         }
 
-        var messages = await _chatService.GetMessagesAsync(chatId, userId);
+        var messages = await _chatService.GetMessagesAsync(chatId, userGuid);
 
         return Ok(messages);
     }
