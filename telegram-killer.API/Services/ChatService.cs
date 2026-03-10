@@ -35,13 +35,15 @@ public class ChatService : IChatService
 
         if (existingChat != null)
         {
+            
             _logger.LogInformation("Chat creation discarded: Chat with the user already exists. ChatId: {ChatId}", existingChat.Id);
             return existingChat;
         }
 
         var chat = new Chat
         {
-            Id = Guid.NewGuid()
+            Id = Guid.NewGuid(),
+            CreatedAt = DateTimeOffset.UtcNow
         };
         
         _applicationContext.Chats.Add(chat);
