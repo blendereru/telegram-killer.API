@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "telegram-killer.API", "tele
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "telegram-killer.API.IntegrationTests", "tests\telegram-killer.API.IntegrationTests\telegram-killer.API.IntegrationTests.csproj", "{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "telegram-killer.API.UnitTests", "tests\telegram-killer.API.UnitTests\telegram-killer.API.UnitTests.csproj", "{0C568D6A-891E-4721-915E-035DE2030343}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8CE4CD0D-DC8A-4685-9549-E2038EECC99D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C568D6A-891E-4721-915E-035DE2030343}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C568D6A-891E-4721-915E-035DE2030343}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C568D6A-891E-4721-915E-035DE2030343}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C568D6A-891E-4721-915E-035DE2030343}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

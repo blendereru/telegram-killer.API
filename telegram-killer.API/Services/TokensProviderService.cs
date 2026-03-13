@@ -21,6 +21,8 @@ public class TokensProviderService : ITokensProviderService
     
     public string GenerateAccessToken(User user)
     {
+        ArgumentNullException.ThrowIfNull(user);
+        
         var credentials = new SigningCredentials(_jwtConfigurationOptions.GetSymmetricSecurityKey(),
             SecurityAlgorithms.HmacSha256);
 
