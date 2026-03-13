@@ -25,14 +25,16 @@ public class ChatService : IChatService
         {
             _logger.LogWarning("Initiated chat creation with yourself. UserId: {UserId}", userA);
             var exception = new ValidationException("Cannot create a chat with yourself");
-            exception.Data["UserA"] = "UserA id shouldn't be equal to UserB";
+            exception.Data["UserA"] = "UserA id can't be equal to UserB";
             throw exception;
         }
         
         var existingChat = await _applicationContext.Chats
-            .Where(c => c.Participants.Count == 2)
+            .AsNoTracking()
+            .Where(c => c.Type == ChatType.Direct)
             .Where(c => c.Participants.Any(p => p.UserId == userA))
             .Where(c => c.Participants.Any(p => p.UserId == userB))
+            .Include(c => c.Participants)
             .FirstOrDefaultAsync();
 
         if (existingChat != null)
@@ -44,6 +46,7 @@ public class ChatService : IChatService
         var chat = new Chat
         {
             Id = Guid.NewGuid(),
+            Type = ChatType.Direct,
             CreatedAt = DateTimeOffset.UtcNow
         };
         

@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,19 +12,15 @@ using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.IntegrationTests.Helpers;
 using telegram_killer.API.Models;
 using telegram_killer.API.Services.Interfaces;
-using Xunit.Abstractions;
-
 namespace telegram_killer.API.IntegrationTests;
 
 public class AccountControllerTests : IClassFixture<TelegramKillerWebApplicationFactory>, IAsyncLifetime
 {
     private readonly TelegramKillerWebApplicationFactory _factory;
-    private readonly ITestOutputHelper _testOutputHelper;
 
-    public AccountControllerTests(TelegramKillerWebApplicationFactory factory, ITestOutputHelper testOutputHelper)
+    public AccountControllerTests(TelegramKillerWebApplicationFactory factory)
     {
         _factory = factory;
-        _testOutputHelper = testOutputHelper;
     }
 
     public async Task InitializeAsync()
@@ -42,12 +40,7 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         var response = await client.PostAsJsonAsync("api/account/signup", request);
         
         // Assert
-        var body = await response.Content.ReadAsStringAsync();
-        
-        _testOutputHelper.WriteLine(body);
-        
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        
         await TestHelpers.AssertValidationProblemDetails(response, "Email", "required");
     }
 
@@ -800,6 +793,454 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         await TestHelpers.AssertProblemDetails(response, "must be verified");
+    }
+
+    [Fact]
+    public async Task RefreshTokens_IpMisMatch_Returns401UnauthorizedWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string userEmail = "user@example.com";
+        var userRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        const string userIp = "192.0.2.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+        const int expirationTimeInDays = 7;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            var refreshSession = new RefreshSession
+            {
+                UserId = user.Id,
+                RefreshToken = userRefreshToken,
+                Ip = userIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(expirationTimeInDays)
+            };
+            
+            context.RefreshSessions.Add(refreshSession);
+            await context.SaveChangesAsync();
+        }
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = userRefreshToken
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Arrange
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "invalid");
+    }
+
+    [Fact]
+    public async Task RefreshTokens_MoreThan5ActiveSessions_RemovesAllExceptNewOne()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        var newRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        const string userEmail = "user@example.com";
+        const string localIp = "127.0.0.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+        const int expirationTimeInDays = 7;
+        const int previousRefreshSessionsCount = 5;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            for (var i = 0; i < previousRefreshSessionsCount; i++)
+            {
+                var userRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+                var creationDateOffsetFromNow = -i;
+
+                var previousRefreshSession = new RefreshSession
+                {
+                    UserId = user.Id,
+                    RefreshToken = userRefreshToken,
+                    Ip = localIp,
+                    UA = userUa,
+                    CreatedAt = DateTimeOffset.UtcNow.AddDays(creationDateOffsetFromNow),
+                    ExpiresAt = DateTimeOffset.UtcNow.AddDays(creationDateOffsetFromNow + expirationTimeInDays)
+                };
+                context.RefreshSessions.Add(previousRefreshSession);
+            }
+            await context.SaveChangesAsync();
+
+            var newRefreshSession = new RefreshSession
+            {
+                UserId = user.Id,
+                RefreshToken = newRefreshToken,
+                Ip = localIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(expirationTimeInDays)
+            };
+            
+            context.RefreshSessions.Add(newRefreshSession);
+            await context.SaveChangesAsync();
+        }
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = newRefreshToken
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Assert
+        response.EnsureSuccessStatusCode();
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var newRefreshSession = await context.RefreshSessions.ToListAsync();
+            
+            Assert.Single(newRefreshSession);
+        }
+    }
+
+    [Fact]
+    public async Task RefreshTokens_Returns200OkWithTokens()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string userEmail = "user@example.com";
+        var userRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        const string localIp = "127.0.0.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+        const int expirationTimeInDays = 7;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            var refreshSession = new RefreshSession
+            {
+                UserId = user.Id,
+                RefreshToken = userRefreshToken,
+                Ip = localIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(expirationTimeInDays)
+            };
+            
+            context.RefreshSessions.Add(refreshSession);
+            await context.SaveChangesAsync();
+        }
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = userRefreshToken
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/tokens/refresh", request);
+        
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        var authResult = await response.Content.ReadFromJsonAsync<AuthResult>();
+        
+        Assert.NotNull(authResult);
+        Assert.NotNull(authResult.AccessToken);
+        Assert.NotNull(authResult.RefreshToken);
+    }
+    
+    [Fact]
+    public async Task Logout_NoAccessTokenProvided_Returns401Unauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        var request = new GetRefreshTokenRequest();
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/logout", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+    
+    [Fact]
+    public async Task Logout_NoRefreshTokenProvided_Returns400BadRequestWithValidationProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var tokensProvider = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            accessToken = tokensProvider.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        var request = new GetRefreshTokenRequest();
+
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/logout", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+    
+    [Fact]
+    public async Task Logout_NonExistentRefreshToken_Returns204NoContent()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        const string userEmail = "user@example.com";
+        var nonExistentRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        string accessToken;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = nonExistentRefreshToken
+        };
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/logout", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_RefreshTokenUsersDoNotMatch_Returns403ForbiddenWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string userAEmail = "userA@example.com";
+        const string userBEmail = "userB@example.com";
+
+        var userBRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        const string userIp = "192.0.2.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+
+        const int expirationTimeInDays = 7;
+
+        Guid userBId;
+        string accessToken;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var userA = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = userAEmail,
+                Username = userAEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var userB = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = userBEmail,
+                Username = userBEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            userBId = userB.Id;
+
+            context.Users.AddRange(userA, userB);
+
+            var refreshSession = new RefreshSession
+            {
+                UserId = userBId,
+                RefreshToken = userBRefreshToken,
+                Ip = userIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(expirationTimeInDays)
+            };
+
+            context.RefreshSessions.Add(refreshSession);
+
+            await context.SaveChangesAsync();
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            accessToken = tokensProviderService.GenerateAccessToken(userA);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = userBRefreshToken
+        };
+
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/logout", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        await TestHelpers.AssertProblemDetails(response, "permission");
+    }
+
+    [Fact]
+    public async Task Logout_RemovesRefreshSessionFromDb()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string userIp = "192.0.2.1";
+        const string userUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+        const string userEmail = "user@example.com";
+        
+        var userRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        Guid userId;
+        string accessToken;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var tokensProvider = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            userId = user.Id;
+
+            context.Users.Add(user);
+
+            var refreshSession = new RefreshSession
+            {
+                UserId = userId,
+                RefreshToken = userRefreshToken,
+                Ip = userIp,
+                UA = userUa,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(7)
+            };
+
+            context.RefreshSessions.Add(refreshSession);
+
+            await context.SaveChangesAsync();
+
+            accessToken = tokensProvider.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        var request = new GetRefreshTokenRequest
+        {
+            RefreshToken = userRefreshToken
+        };
+
+        // Act
+        var response = await client.PostAsJsonAsync("api/account/logout", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var session = await context.RefreshSessions
+                .FirstOrDefaultAsync(x => x.RefreshToken == userRefreshToken);
+
+            Assert.Null(session);
+        }
     }
     
     public Task DisposeAsync() => Task.CompletedTask;
