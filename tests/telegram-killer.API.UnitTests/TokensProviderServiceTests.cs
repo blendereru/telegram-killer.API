@@ -253,6 +253,41 @@ public class TokensProviderServiceTests
         Assert.True(handler.CanReadToken(token));
     }
     
+    [Fact]
+    public void GenerateRefreshToken_ShouldReturnToken()
+    {
+        // Act
+        var token = _service.GenerateRefreshToken();
+
+        // Assert
+        Assert.NotNull(token);
+        Assert.NotEmpty(token);
+    }
+
+    [Fact]
+    public void GenerateRefreshToken_ShouldBeValidBase64()
+    {
+        // Act
+        var token = _service.GenerateRefreshToken();
+
+        // Assert
+        var bytes = Convert.FromBase64String(token);
+
+        Assert.NotNull(bytes);
+    }
+    
+    [Fact]
+    public void GenerateRefreshToken_ShouldGenerate32Bytes()
+    {
+        // Act
+        var token = _service.GenerateRefreshToken();
+
+        // Assert
+        var bytes = Convert.FromBase64String(token);
+
+        Assert.Equal(32, bytes.Length);
+    }
+    
     private User CreateUser()
     {
         return new User

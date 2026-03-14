@@ -200,7 +200,7 @@ public class AccountService : IAccountService
         if (user == null)
         {
             _logger.LogWarning("User with Id {UserId} not found", userId);
-            throw new NotFoundException("User doesn't exist");
+            throw new NotFoundException("User is not found");
         }
 
         _logger.LogInformation("User information successfully retrieved. UserId: {UserId}", user.Id);

@@ -1243,5 +1243,300 @@ public class AccountControllerTests : IClassFixture<TelegramKillerWebApplication
         }
     }
     
+    [Fact]
+    public async Task GetMyInformation_NoAccessTokenProvided_Returns401Unauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        // Act
+        var response = await client.GetAsync("api/account/me");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetMyInformation_NonExistentUser_Return404NotFoundWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var tokensProvider = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            accessToken = tokensProvider.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync("api/account/me");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "not found");
+    }
+
+    [Fact]
+    public async Task GetMyInformation_ReturnsUserIdAndEmailWithDbMatchingValues()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string userEmail = "user@example.com";
+        string accessToken;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var tokensProvider = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var user = new User
+            {
+                Email = userEmail,
+                Username = userEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+            
+            accessToken = tokensProvider.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync("api/account/me");
+        
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        var userInfo = await response.Content.ReadFromJsonAsync<GetUserInformationResponse>();
+        
+        Assert.NotNull(userInfo);
+        Assert.NotNull(userInfo.Email);
+        Assert.Equal(userEmail, userInfo.Email);
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var user = await context.Users.FirstOrDefaultAsync(x => x.Email == userInfo.Email);
+            
+            Assert.NotNull(user);
+            Assert.Equal(user.Email, userInfo.Email);
+            Assert.Equal(user.Id, userInfo.Id);
+        }
+    }
+
+    [Fact]
+    public async Task GetUserInformation_NoAccessTokenProvided_Returns401Unauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string testEmail = "user@example.com";
+        
+        // Act
+        var response = await client.GetAsync($"api/account?email={testEmail}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetUserInformation_EmptyEmailProvided_Returns400BadRequestWithValidationProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string testEmail = "";
+
+        string accessToken;
+        using(var scope = _factory.CreateScope())
+        {
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/account?email={testEmail}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
+        await TestHelpers.AssertValidationProblemDetails(response, "email", "required");
+    }
+
+    [Fact]
+    public async Task GetUserInformation_NonExistentRequester_Returns401UnauthorizedWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string exampleRequestedUserEmail = "nonexistentuser@example.com";
+        const string requesterEmail = "user@example.com";
+        string accessToken;
+        
+        using(var scope = _factory.CreateScope())
+        {
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var requester = new User
+            {
+                Email = requesterEmail,
+                Username = requesterEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/account?email={exampleRequestedUserEmail}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "authorized");
+    }
+    
+    [Fact]
+    public async Task GetUserInformation_NonExistentRequestedUser_Returns404NotFoundWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string nonExistentRequestedUserEmail = "nonexistentuser@example.com";
+        const string requesterEmail = "user@example.com";
+        string accessToken;
+        
+        using(var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var requester = new User
+            {
+                Email = requesterEmail,
+                Username = requesterEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.Add(requester);
+            await context.SaveChangesAsync();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/account?email={nonExistentRequestedUserEmail}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "not found");
+    }
+
+    [Fact]
+    public async Task GetUserInformation_ReturnsUserIdAndEmailWithDbMatchingValues()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        const string requestedUserEmail = "nonexistentuser@example.com";
+        const string requesterEmail = "user@example.com";
+        string accessToken;
+        
+        using(var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            var requester = new User
+            {
+                Email = requesterEmail,
+                Username = requesterEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var requested = new User
+            {
+                Email = requestedUserEmail,
+                Username = requestedUserEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(requester, requested);
+            await context.SaveChangesAsync();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/account?email={requestedUserEmail}");
+        
+        // Assert
+        response.EnsureSuccessStatusCode();
+        
+        var userInfo = await response.Content.ReadFromJsonAsync<GetUserInformationResponse>();
+        
+        Assert.NotNull(userInfo);
+        Assert.NotNull(userInfo.Email);
+        Assert.Equal(requestedUserEmail, userInfo.Email);
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var requested = await context.Users.FirstOrDefaultAsync(u => u.Email == requestedUserEmail);
+            
+            Assert.NotNull(requested);
+            Assert.Equal(requested.Email, userInfo.Email);
+            Assert.Equal(requested.Id, userInfo.Id);
+        }
+    }
+    
     public Task DisposeAsync() => Task.CompletedTask;
 }

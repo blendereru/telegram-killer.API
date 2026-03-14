@@ -144,7 +144,7 @@ public class AccountController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<GetUserInformationResponse>(StatusCodes.Status200OK, "application/json")]
     [HttpGet]
-    public async Task<IActionResult> GetUserInformation([FromQuery, Required] string email)
+    public async Task<IActionResult> GetUserInformation([FromQuery, Required, EmailAddress] string email)
     {
         var requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         
