@@ -12,7 +12,8 @@ using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.IntegrationTests.Helpers;
 using telegram_killer.API.Models;
 using telegram_killer.API.Services.Interfaces;
-namespace telegram_killer.API.IntegrationTests;
+
+namespace telegram_killer.API.IntegrationTests.Controllers;
 
 public class AccountControllerTests : IClassFixture<TelegramKillerWebApplicationFactory>, IAsyncLifetime
 {

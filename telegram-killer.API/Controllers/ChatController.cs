@@ -9,7 +9,7 @@ using telegram_killer.API.Services.Interfaces;
 
 namespace telegram_killer.API.Controllers;
 
-[Authorize]
+[Authorize(Policy = "ConfirmedEmails")]
 [Route("api/chat")]
 [ApiController]
 public class ChatController : ControllerBase
@@ -23,15 +23,16 @@ public class ChatController : ControllerBase
         _logger = logger;
     }
     
-    [EndpointSummary("This endpoint is needed to create a chat with user")]
-    [EndpointDescription("This endpoint is needed to create a chat with user whose Id is provided in the body. This endpoint requires authentication.")]
+    [EndpointSummary("Create a direct chat(conversation) with user")]
+    [EndpointDescription("Create a direct chat with user providing wanted user's id in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
     [ProducesResponseType<CreateChatResponse>(StatusCodes.Status201Created, "application/json")]
+    [ProducesResponseType<CreateChatResponse>(StatusCodes.Status200OK, "application/json")]
     [Consumes("application/json")]
     [HttpPost]
-    public async Task<IActionResult> Create(CreateChatRequest request)
+    public async Task<IActionResult> CreateDirect(CreateChatRequest request)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         
@@ -46,16 +47,22 @@ public class ChatController : ControllerBase
         var chatResponse = new CreateChatResponse
         {
             ChatId = chat.Id,
-            Participants = chat.Participants.Select(p => p.UserId).ToList(),
             CreatedAt = chat.CreatedAt
         };
+        
+        if (chat.Participants.Count == 0)
+        {
+            chatResponse.Participants = [userGuid, request.OtherUserId];
+            return Ok(chatResponse);
+        }
+
+        chatResponse.Participants = chat.Participants.Select(p => p.UserId).ToList();
 
         var location = $"api/chat/{chat.Id}"; // refactor later.
         
         return Created(location, chatResponse);
     }
-
-    [Authorize]
+    
     [EndpointSummary("Retrieve messages for a specific chat")]
     [EndpointDescription("Returns all messages belonging to the specified chat")]
     [ProducesResponseType<List<MessageDto>>(StatusCodes.Status200OK)]

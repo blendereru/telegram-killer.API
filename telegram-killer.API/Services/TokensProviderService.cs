@@ -26,7 +26,7 @@ public class TokensProviderService : ITokensProviderService
         var credentials = new SigningCredentials(_jwtConfigurationOptions.GetSymmetricSecurityKey(),
             SecurityAlgorithms.HmacSha256);
 
-        var claims = new List<Claim>()
+        var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),

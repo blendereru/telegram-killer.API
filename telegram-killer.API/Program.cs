@@ -45,6 +45,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = jwtOptions.GetSymmetricSecurityKey()
         };
     });
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("ConfirmedEmails", policy =>
+    {
+        policy.RequireClaim("email_confirmed", "True");
+    });
 builder.Services.AddProblemDetails(configure =>
 {
     configure.CustomizeProblemDetails = context =>

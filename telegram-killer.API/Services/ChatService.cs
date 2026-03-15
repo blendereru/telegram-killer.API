@@ -19,58 +19,62 @@ public class ChatService : IChatService
         _logger = logger;
     }
 
-    public async Task<Chat> CreateDirectChatAsync(Guid userA, Guid userB)
+    public async Task<Chat> CreateDirectChatAsync(Guid requesterId, Guid requestedId)
     {
-        if (userA == userB)
+        if (requesterId == requestedId)
         {
-            _logger.LogWarning("Initiated chat creation with yourself. UserId: {UserId}", userA);
-            var exception = new ValidationException("Cannot create a chat with yourself");
-            exception.Data["UserA"] = "UserA id can't be equal to UserB";
-            throw exception;
+            _logger.LogWarning("Attempted to create a chat with oneself. Requested: {RequestedId}", requestedId);
+            throw new ValidationException("Cannot create a chat with yourself");
+        }
+        
+        var targetUser = await _applicationContext.Users
+            .Where(u => u.Id == requestedId)
+            .Select(u => new { u.Id, u.IsEmailConfirmed })
+            .FirstOrDefaultAsync();
+        
+        if (targetUser == null || !targetUser.IsEmailConfirmed)
+        {
+            _logger.LogWarning("Chat creation failed: Requested user does not exist or has non-confirmed email. RequesterId: {RequesterId}", requesterId);
+            throw new NotFoundException("Requested user is not found");
         }
         
         var existingChat = await _applicationContext.Chats
             .AsNoTracking()
             .Where(c => c.Type == ChatType.Direct)
-            .Where(c => c.Participants.Any(p => p.UserId == userA))
-            .Where(c => c.Participants.Any(p => p.UserId == userB))
-            .Include(c => c.Participants)
+            .Where(c => c.Participants.Any(p => p.UserId == requesterId))
+            .Where(c => c.Participants.Any(p => p.UserId == requestedId))
             .FirstOrDefaultAsync();
 
         if (existingChat != null)
         {
-            _logger.LogInformation("Chat creation discarded: Chat with the user already exists. ChatId: {ChatId}", existingChat.Id);
+            _logger.LogInformation("Chat already exists between users. Returning existing chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}", existingChat.Id, requesterId, requestedId);
             return existingChat;
         }
-
+        
         var chat = new Chat
         {
-            Id = Guid.NewGuid(),
             Type = ChatType.Direct,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            Participants = new List<ChatParticipant>
+            {
+                new() { UserId = requesterId, JoinedAt = DateTimeOffset.UtcNow },
+                new() { UserId = requestedId, JoinedAt = DateTimeOffset.UtcNow }
+            }
         };
-        
+
         _applicationContext.Chats.Add(chat);
 
-        _applicationContext.ChatParticipants.AddRange(
-            new ChatParticipant
-            {
-                ChatId = chat.Id,
-                UserId = userA,
-                JoinedAt = DateTimeOffset.UtcNow
-            },
-            new ChatParticipant
-            {
-                ChatId = chat.Id,
-                UserId = userB,
-                JoinedAt = DateTimeOffset.UtcNow
-            }
-        );
+        try
+        {
+            await _applicationContext.SaveChangesAsync();
+            _logger.LogInformation("Successfully created a new direct chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}", chat.Id, requesterId, requestedId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while saving new chat to database. RequesterId: {RequesterId}, RequestedId: {RequestedId}", requesterId, requestedId);
+            throw;
+        }
 
-        await _applicationContext.SaveChangesAsync();
-
-        _logger.LogInformation("Chat successfully created: ChatId: {ChatId}", chat.Id);
-        
         return chat;
     }
 
