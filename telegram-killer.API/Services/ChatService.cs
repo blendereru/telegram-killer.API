@@ -141,4 +141,12 @@ public class ChatService : IChatService
 
         return message;
     }
+
+    public async Task<bool> UserCanAccessChat(Guid userId, Guid chatId)
+    {
+        var isParticipant = await _applicationContext.ChatParticipants
+            .AnyAsync(cp => cp.ChatId == chatId && cp.UserId == userId);
+
+        return isParticipant;
+    }
 }

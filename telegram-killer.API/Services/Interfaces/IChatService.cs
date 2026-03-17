@@ -10,4 +10,5 @@ public interface IChatService
     Task<List<MessageDto>> GetMessagesAsync(Guid chatId, Guid userId);
     
     Task<Message> StoreMessageAsync(Guid chatId, Guid senderId, string content);
+    Task<bool> UserCanAccessChat(Guid userId, Guid chatId);
 }

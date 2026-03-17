@@ -36,8 +36,25 @@ public class ChatHub : Hub
 
     public async Task JoinChat(string chatId)
     {
+        var chatGuid = Guid.Parse(chatId);
+        var userGuid = Guid.Parse(Context.UserIdentifier!);
+        
+        if (!await _chatService.UserCanAccessChat(userGuid, chatGuid))
+        {
+            _logger.LogWarning("Chat join failed: user can't access chat. ChatId: {ChatId}, UserId: {UserId}", userGuid, userGuid);
+            throw new HubException("You are not allowed to join this chat.");
+        }
+        
         _logger.LogInformation("User with Id {UserId} joined chat {ChatId}", Context.UserIdentifier, chatId);
         await Groups.AddToGroupAsync(Context.ConnectionId, chatId);
+    }
+
+    public async Task LeaveChat(string chatId)
+    {
+        var userId = Context.UserIdentifier!;
+        
+        _logger.LogInformation("User with Id {UserId} left chat {ChatId}", userId, chatId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId);
     }
     
     public async Task SendMessage(string chatId, string content)
