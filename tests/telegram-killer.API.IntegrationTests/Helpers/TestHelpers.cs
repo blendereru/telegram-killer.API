@@ -40,7 +40,7 @@ public static class TestHelpers
         }
     }
     
-    public static async Task AssertProblemDetails(HttpResponseMessage response, string title) 
+    public static async Task AssertProblemDetails(HttpResponseMessage response, string? title = null) 
     {
         Assert.Equal("application/problem+json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
 
@@ -64,6 +64,9 @@ public static class TestHelpers
             Assert.True(DateTimeOffset.TryParse(ts, out _), "Timestamp extension is not a valid date");
         }
 
-        Assert.Contains(title, problem.Title, StringComparison.OrdinalIgnoreCase);
+        if(title != null) 
+        {
+            Assert.Contains(title, problem.Title, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

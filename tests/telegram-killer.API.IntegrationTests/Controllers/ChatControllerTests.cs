@@ -320,9 +320,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.NotNull(chat);
         Assert.NotNull(chat.Participants);
 
-        var expectedLocation = new Uri($"api/chat/{chat.ChatId}");
-        
-        Assert.True(response.Headers.Location == expectedLocation);
+        Assert.Equal($"/api/chat/{chat.ChatId}", response.Headers.Location.AbsolutePath);
         
         var participantIds = chat.Participants;
         
@@ -421,6 +419,215 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             Assert.True(dbParticipantIds.All(id => responseBody.Participants.Contains(id)));
         }
     }
+
+    [Fact]
+    public async Task GetMessages_AccessTokenNotProvided_Returns401Unauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        var chatId = Guid.NewGuid();
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetMessages_NonExistentChat_Returns403ForbiddenWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        var nonExistentChatId = Guid.NewGuid();
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization = 
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        await TestHelpers.AssertProblemDetails(response);
+    }
+
+    [Fact]
+    public async Task GetMessages_UserNotMemberOfChat_Returns403ForbiddenWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        var nonExistentChatId = Guid.NewGuid();
+        const string chatParticipant1Email = "participant1@example.com";
+        const string chatParticipant2Email = "participant2@example.com";
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant1 = new User
+            {
+                Email = chatParticipant1Email,
+                Username = chatParticipant1Email,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            var anotherParticipant2 = new User
+            {
+                Email = chatParticipant2Email,
+                Username = chatParticipant2Email,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.AddRange(user, anotherParticipant1, anotherParticipant2);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = anotherParticipant1.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant2.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization = 
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        await TestHelpers.AssertProblemDetails(response);
+    }
+
+    [Fact]
+    public async Task GetMessages_NoMessagesInChat_Returns200Ok()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        var nonExistentChatId = Guid.NewGuid();
+        const string chatParticipantEmail = "participant@example.com";
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = chatParticipantEmail,
+                Username = chatParticipantEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization = 
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+
+        Assert.NotNull(chatMessages);
+        Assert.NotNull(chatMessages.Messages);
+        Assert.Null(chatMessages.LastReadMessageId);
+        Assert.Empty(chatMessages.Messages);
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var chat = await context.Chats.SingleOrDefaultAsync(c => c.Id == chatMessages.ChatId);
+
+            Assert.NotNull(chat);
+            Assert.Equal(chat.Id, chatMessages.ChatId);
+        }
+    }
+    
     
     public Task DisposeAsync() => Task.CompletedTask;
 }
