@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using telegram_killer.API.Data;
 using telegram_killer.API.DTOs.Request_DTOs;
+using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.IntegrationTests.Helpers;
 using telegram_killer.API.Models;
 using telegram_killer.API.Services.Interfaces;
@@ -256,5 +257,170 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             Assert.Equal(2, participantIds.Distinct().Count());
         }
     }
+
+    [Fact]
+    public async Task CreateDirect_Returns201Created()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid requestedId;
+        Guid requesterId;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var requester = new User
+            {
+                Email = "user1@example.com",
+                Username = "user1@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var requested = new User
+            {
+                Email = "user2@example.com",
+                Username = "user2@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            applicationContext.Users.AddRange(requester, requested);
+            await applicationContext.SaveChangesAsync();
+
+            requestedId = requested.Id;
+            requesterId = requester.Id;
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+
+        var request = new CreateChatRequest
+        {
+            OtherUserId = requestedId
+        };
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/chat", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        Assert.NotNull(response.Headers.Location);
+
+        var chat = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
+        
+        Assert.NotNull(chat);
+        Assert.NotNull(chat.Participants);
+
+        var expectedLocation = new Uri($"api/chat/{chat.ChatId}");
+        
+        Assert.True(response.Headers.Location == expectedLocation);
+        
+        var participantIds = chat.Participants;
+        
+        Assert.Equal(2, participantIds.Count);
+        Assert.Contains(requestedId, participantIds);
+        Assert.Contains(requesterId, participantIds);
+        Assert.Equal(2, participantIds.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task CreateDirect_ReturnValuesMatchWithDbOnes()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid requestedId;
+        Guid requesterId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var requester = new User
+            {
+                Email = "user1@example.com",
+                Username = "user1@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var requested = new User
+            {
+                Email = "user2@example.com",
+                Username = "user2@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            applicationContext.Users.AddRange(requester, requested);
+            await applicationContext.SaveChangesAsync();
+
+            requestedId = requested.Id;
+            requesterId = requester.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+
+        var request = new CreateChatRequest
+        {
+            OtherUserId = requestedId
+        };
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.PostAsJsonAsync("api/chat", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var responseBody = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
+
+        Assert.NotNull(responseBody);
+
+        using (var scope = _factory.CreateScope())
+        {
+            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var chats = await applicationContext.Chats
+                .Include(c => c.Participants)
+                .ToListAsync();
+
+            Assert.Single(chats);
+
+            var dbChat = chats[0];
+            
+            Assert.Equal(responseBody.ChatId, dbChat.Id);
+            
+            var dbParticipantIds = dbChat.Participants
+                .Select(p => p.UserId)
+                .ToList();
+            
+            Assert.Equal(2, dbParticipantIds.Count);
+            Assert.Equal(2, responseBody.Participants.Count);
+            
+            Assert.Contains(requesterId, dbParticipantIds);
+            Assert.Contains(requestedId, dbParticipantIds);
+
+            Assert.Contains(requesterId, responseBody.Participants);
+            Assert.Contains(requestedId, responseBody.Participants);
+            
+            Assert.True(responseBody.Participants.All(id => dbParticipantIds.Contains(id)));
+            Assert.True(dbParticipantIds.All(id => responseBody.Participants.Contains(id)));
+        }
+    }
+    
     public Task DisposeAsync() => Task.CompletedTask;
 }
