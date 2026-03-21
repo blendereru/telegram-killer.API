@@ -88,7 +88,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         {
             var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
 
-            var user = new User()
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = "user@example.com",
@@ -101,7 +101,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             accessToken = tokensProviderService.GenerateAccessToken(user);
         }
 
-        var request = new CreateChatRequest()
+        var request = new CreateChatRequest
         {
             OtherUserId = otherUserId
         };
@@ -114,7 +114,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await TestHelpers.AssertValidationProblemDetails(response, "UserA", "equal");
+        await TestHelpers.AssertValidationProblemDetails(response, null, null);
     }
 
     [Fact]

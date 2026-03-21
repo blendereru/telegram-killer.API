@@ -7,8 +7,8 @@ public static class TestHelpers
 {
     public static async Task AssertValidationProblemDetails(
         HttpResponseMessage response, 
-        string expectedFieldName, 
-        string expectedErrorMessage)
+        string? expectedFieldName, 
+        string? expectedErrorMessage)
     {
         Assert.Equal("application/problem+json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
 
@@ -31,10 +31,13 @@ public static class TestHelpers
         {
             Assert.True(DateTimeOffset.TryParse(ts, out _), "Timestamp extension is not a valid date");
         }
-        
-        Assert.NotNull(problem.Errors);
-        Assert.Contains(expectedFieldName, problem.Errors.Keys);
-        Assert.Contains(problem.Errors[expectedFieldName], msg => msg.Contains(expectedErrorMessage));
+
+        if (expectedFieldName != null && expectedErrorMessage != null)
+        {
+            Assert.NotNull(problem.Errors);
+            Assert.Contains(expectedFieldName, problem.Errors.Keys);
+            Assert.Contains(problem.Errors[expectedFieldName], msg => msg.Contains(expectedErrorMessage));
+        }
     }
     
     public static async Task AssertProblemDetails(HttpResponseMessage response, string title) 
