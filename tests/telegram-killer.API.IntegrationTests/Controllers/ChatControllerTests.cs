@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using telegram_killer.API.Data;
 using telegram_killer.API.DTOs.Request_DTOs;
@@ -160,6 +161,100 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await TestHelpers.AssertProblemDetails(response, "not found");
     }
-    
+
+    [Fact]
+    public async Task CreateDirect_ChatAlreadyExists_Returns200Ok()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid requestedId;
+        Guid requesterId;
+        var existentChatId = Guid.NewGuid();
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var requester = new User
+            {
+                Email = "user1@example.com",
+                Username = "user1@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var requested = new User
+            {
+                Email = "user2@example.com",
+                Username = "user2@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            applicationContext.Users.AddRange(requester, requested);
+            await applicationContext.SaveChangesAsync();
+
+            requestedId = requested.Id;
+            requesterId = requester.Id;
+            
+            var existentChat = new Chat
+            {
+                Id = existentChatId,
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = requester.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = requested.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+            
+            applicationContext.Chats.Add(existentChat);
+            await applicationContext.SaveChangesAsync();
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(requester);
+        }
+
+        var request = new CreateChatRequest
+        {
+            OtherUserId = requestedId
+        };
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/chat", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using (var scope = _factory.CreateScope())
+        {
+            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var existentChat = await applicationContext.Chats
+                .Include(chat => chat.Participants)
+                .SingleOrDefaultAsync(c => c.Id == existentChatId);
+            
+            Assert.NotNull(existentChat);
+            Assert.Equal(existentChatId, existentChat.Id);
+            
+            Assert.Equal(2, existentChat.Participants.Count);
+
+            var participantIds = existentChat.Participants
+                .Select(p => p.UserId)
+                .ToList();
+            
+            Assert.Contains(requesterId, participantIds);
+            Assert.Contains(requestedId, participantIds);
+            
+            Assert.Equal(2, participantIds.Distinct().Count());
+        }
+    }
     public Task DisposeAsync() => Task.CompletedTask;
 }
