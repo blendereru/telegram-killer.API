@@ -65,7 +65,7 @@ public class ChatController : ControllerBase
     
     [EndpointSummary("Retrieve messages for a specific chat")]
     [EndpointDescription("Returns all messages belonging to the specified chat")]
-    [ProducesResponseType<List<MessageDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GetChatMessagesDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

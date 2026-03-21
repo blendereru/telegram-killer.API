@@ -90,6 +90,15 @@ public class ChatHub : Hub
             chatId, senderId, content.Length);
     }
 
+    public async Task MarkAsRead(string chatId, string messageId) 
+    {
+        var userId = Guid.Parse(Context.UserIdentifier!);
+        var chatGuid = Guid.Parse(chatId);
+        var messageGuid = Guid.Parse(messageId);
+        
+        await _chatService.MarkAsRead(chatGuid, userId, messageGuid);
+    }
+    
     public override Task OnDisconnectedAsync(Exception? exception)
     {
         if (exception != null)

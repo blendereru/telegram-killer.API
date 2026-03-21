@@ -78,13 +78,28 @@ public class ChatService : IChatService
         return chat;
     }
 
-    public async Task<List<MessageDto>> GetMessagesAsync(Guid chatId, Guid userId)
+    public async Task<GetChatMessagesDto> GetMessagesAsync(Guid chatId, Guid userId)
     {
-        var isParticipant = await _applicationContext.ChatParticipants
-            .AsNoTracking()
-            .AnyAsync(cp => cp.ChatId == chatId && cp.UserId == userId);
+        var chatData = await _applicationContext.ChatParticipants
+            .Where(cp => cp.ChatId == chatId && cp.UserId == userId)
+            .Select(cp => new
+            {
+                cp.LastReadMessageId,
+                Messages = _applicationContext.Messages
+                    .Where(m => m.ChatId == chatId)
+                    .OrderBy(m => m.SentAt)
+                    .Select(m => new MessageDto
+                    {
+                        Id = m.Id,
+                        SenderId = m.SenderId,
+                        Content = m.Content,
+                        SentAt = m.SentAt
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
 
-        if (!isParticipant)
+        if (chatData == null)
         {
             _logger.LogWarning(
                 "Unauthorized chat access attempt. User={UserId} Chat={ChatId}",
@@ -93,21 +108,12 @@ public class ChatService : IChatService
             throw new ForbiddenException("User is not a participant of this chat.");
         }
 
-        var messages = await _applicationContext.Messages
-            .AsNoTracking()
-            .Where(m => m.ChatId == chatId)
-            .OrderBy(m => m.SentAt)
-            .Select(m => new MessageDto
-            {
-                Id = m.Id,
-                ChatId = m.ChatId,
-                SenderId = m.SenderId,
-                Content = m.Content,
-                SentAt = m.SentAt
-            })
-            .ToListAsync();
-
-        return messages;
+        return new GetChatMessagesDto
+        {
+            ChatId = chatId,
+            Messages = chatData.Messages,
+            LastReadMessageId = chatData.LastReadMessageId
+        };
     }
 
     public async Task<Message> StoreMessageAsync(Guid chatId, Guid senderId, string content)
@@ -148,5 +154,53 @@ public class ChatService : IChatService
             .AnyAsync(cp => cp.ChatId == chatId && cp.UserId == userId);
 
         return isParticipant;
+    }
+
+    public async Task MarkAsRead(Guid chatId, Guid messageId, Guid userId)
+    {
+        var affectedRows = await _applicationContext.ChatParticipants
+            .Where(c =>
+                c.ChatId == chatId &&
+                c.UserId == userId &&
+                (c.LastReadMessageId == null || c.LastReadMessageId < messageId))
+            .ExecuteUpdateAsync(setters =>
+                setters.SetProperty(c => c.LastReadMessageId, messageId));
+
+        if (affectedRows > 0)
+        {
+            _logger.LogInformation(
+                "Marked message as read. MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
+                messageId, chatId, userId);
+
+            return;
+        }
+        
+        var chatExists = await _applicationContext.ChatParticipants
+            .AnyAsync(c => c.ChatId == chatId && c.UserId == userId);
+
+        if (!chatExists)
+        {
+            _logger.LogWarning(
+                "Mark message as read failed: participant doesn't exist. ChatId: {ChatId}, UserId: {UserId}",
+                chatId, userId);
+
+            throw new NotFoundException("User or chat is not found");
+        }
+        
+        var messageExists = await _applicationContext.Messages
+            .AnyAsync(m => m.Id == messageId);
+
+        if (!messageExists)
+        {
+            _logger.LogWarning(
+                "Mark message as read failed: message not found. ChatId: {ChatId}, UserId: {UserId}, MessageId: {MessageId}",
+                chatId, userId, messageId);
+
+            throw new NotFoundException("Message not found");
+        }
+
+        _logger.LogInformation(
+            "Mark as read skipped (already up to date). MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
+            messageId, chatId, userId);
     }
 }
