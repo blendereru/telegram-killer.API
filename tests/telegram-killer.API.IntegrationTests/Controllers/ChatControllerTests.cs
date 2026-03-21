@@ -320,7 +320,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.NotNull(chat);
         Assert.NotNull(chat.Participants);
 
-        Assert.Equal($"/api/chat/{chat.ChatId}", response.Headers.Location.AbsolutePath);
+        Assert.Equal($"/api/chat/{chat.ChatId}", response.Headers.Location.OriginalString);
         
         var participantIds = chat.Participants;
         
@@ -556,7 +556,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         var client = _factory.CreateClient();
 
         string accessToken;
-        var nonExistentChatId = Guid.NewGuid();
+        Guid chatId;
         const string chatParticipantEmail = "participant@example.com";
         
         using (var scope = _factory.CreateScope())
@@ -595,6 +595,8 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
 
             context.Chats.Add(chat);
             await context.SaveChangesAsync();
+
+            chatId = chat.Id;
             
             var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
             
@@ -605,7 +607,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
         
         // Act
-        var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
         
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -627,7 +629,6 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             Assert.Equal(chat.Id, chatMessages.ChatId);
         }
     }
-    
     
     public Task DisposeAsync() => Task.CompletedTask;
 }
