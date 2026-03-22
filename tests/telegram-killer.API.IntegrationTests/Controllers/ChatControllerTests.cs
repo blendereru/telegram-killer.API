@@ -320,7 +320,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.NotNull(chat);
         Assert.NotNull(chat.Participants);
 
-        Assert.Equal($"/api/chat/{chat.ChatId}", response.Headers.Location.OriginalString);
+        Assert.Equal($"api/chat/{chat.ChatId}", response.Headers.Location.OriginalString);
         
         var participantIds = chat.Participants;
         
@@ -627,6 +627,229 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
 
             Assert.NotNull(chat);
             Assert.Equal(chat.Id, chatMessages.ChatId);
+        }
+    }
+
+    [Fact]
+    public async Task GetMessages_Returns200Ok()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        string accessToken;
+        Guid chatId;
+        const string chatParticipantEmail = "participant@example.com";
+        User user;
+        User anotherParticipant;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            anotherParticipant = new User
+            {
+                Email = chatParticipantEmail,
+                Username = chatParticipantEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+            
+            var messages = new List<Message>
+            {
+                new Message
+                {
+                    ChatId = chat.Id,
+                    SenderId = user.Id,
+                    Content = "Hello!",
+                    SentAt = DateTimeOffset.UtcNow
+                },
+                new Message
+                {
+                    ChatId = chat.Id,
+                    SenderId = anotherParticipant.Id,
+                    Content = "Hi there!",
+                    SentAt = DateTimeOffset.UtcNow.AddSeconds(1)
+                },
+                new Message
+                {
+                    ChatId = chat.Id,
+                    SenderId = user.Id,
+                    Content = "How are you?",
+                    SentAt = DateTimeOffset.UtcNow.AddSeconds(2)
+                }
+            };
+
+            context.Messages.AddRange(messages);
+            await context.SaveChangesAsync();
+            
+            chatId = chat.Id;
+            
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization = 
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+
+        Assert.NotNull(chatMessages);
+        Assert.NotNull(chatMessages.Messages);
+        Assert.Null(chatMessages.LastReadMessageId);
+        
+        Assert.Equal(3, chatMessages.Messages.Count);
+        
+        var ordered = chatMessages.Messages.OrderBy(m => m.SentAt).ToList();
+        Assert.True(chatMessages.Messages.SequenceEqual(ordered));
+        
+        Assert.Equal("Hello!", chatMessages.Messages[0].Content);
+        Assert.Equal("Hi there!", chatMessages.Messages[1].Content);
+        Assert.Equal("How are you?", chatMessages.Messages[2].Content);
+        
+        Assert.Equal(user.Id, chatMessages.Messages[0].SenderId);
+        Assert.Equal(anotherParticipant.Id, chatMessages.Messages[1].SenderId);
+        Assert.Equal(user.Id, chatMessages.Messages[2].SenderId);
+    }
+    
+    [Fact]
+    public async Task GetMessages_ReturnsMessagesMatchingDatabase()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        string accessToken;
+        Guid chatId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            var messages = new List<Message>
+            {
+                new Message
+                {
+                    ChatId = chat.Id,
+                    SenderId = user.Id,
+                    Content = "Hello!",
+                    SentAt = DateTimeOffset.UtcNow
+                },
+                new Message
+                {
+                    ChatId = chat.Id,
+                    SenderId = anotherParticipant.Id,
+                    Content = "Hi there!",
+                    SentAt = DateTimeOffset.UtcNow.AddSeconds(1)
+                }
+            };
+
+            context.Messages.AddRange(messages);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var apiResult = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+        Assert.NotNull(apiResult);
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var dbMessages = await context.Messages
+                .Where(m => m.ChatId == chatId)
+                .OrderBy(m => m.SentAt)
+                .ToListAsync();
+
+            Assert.Equal(dbMessages.Count, apiResult.Messages.Count);
+            
+            for (int i = 0; i < dbMessages.Count; i++)
+            {
+                var db = dbMessages[i];
+                var api = apiResult.Messages[i];
+
+                Assert.Equal(db.ChatId, apiResult.ChatId);
+                Assert.Equal(db.Id, api.Id);
+                Assert.Equal(db.SenderId, api.SenderId);
+                Assert.Equal(db.Content, api.Content);
+                Assert.InRange(api.SentAt, db.SentAt.AddSeconds(-1), db.SentAt.AddSeconds(1));
+            }
         }
     }
     
