@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using telegram_killer.API.DTOs.Response_DTOs;
 using telegram_killer.API.Services.Interfaces;
 
 namespace telegram_killer.API.Hubs;
@@ -96,7 +97,17 @@ public class ChatHub : Hub
         var chatGuid = Guid.Parse(chatId);
         var messageGuid = Guid.Parse(messageId);
         
-        await _chatService.MarkAsRead(chatGuid, userId, messageGuid);
+        var result = await _chatService.MarkAsRead(chatGuid, messageGuid, userId);
+
+        await Clients.User(result.SenderId.ToString()).SendAsync("MessageRead", new ReadMessageResponse
+        {
+            ChatId = chatGuid,
+            MessageId = messageGuid,
+            UserId = userId,
+            ReadAt = result.ReadAt ?? DateTimeOffset.UtcNow // refactor later
+        });
+        
+        _logger.LogInformation("Message was read by user. UserId: {UserId}, ChatId: {ChatId}, MessageId: {MessageId}", userId, chatGuid, messageGuid);
     }
     
     public override Task OnDisconnectedAsync(Exception? exception)

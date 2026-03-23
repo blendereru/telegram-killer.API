@@ -156,51 +156,68 @@ public class ChatService : IChatService
         return isParticipant;
     }
 
-    public async Task MarkAsRead(Guid chatId, Guid messageId, Guid userId)
+    public async Task<MarkAsReadResponse> MarkAsRead(Guid chatId, Guid messageId, Guid userId)
     {
+        var now = DateTimeOffset.UtcNow;
+
+        var message = await _applicationContext.Messages
+            .Where(m => m.Id == messageId && m.ChatId == chatId)
+            .Select(m => new
+            {
+                m.Id,
+                m.ChatId,
+                m.SenderId
+            })
+            .FirstOrDefaultAsync();
+
+        if (message == null)
+        {
+            _logger.LogWarning(
+                "Mark message as read failed: message not found or not in chat. ChatId: {ChatId}, MessageId: {MessageId}",
+                chatId, messageId);
+
+            throw new NotFoundException("Message not found");
+        }
+        
         var affectedRows = await _applicationContext.ChatParticipants
             .Where(c =>
                 c.ChatId == chatId &&
                 c.UserId == userId &&
-                (c.LastReadMessageId == null || c.LastReadMessageId < messageId))
+                (c.LastReadMessageId == null || c.LastReadMessageId != messageId))
             .ExecuteUpdateAsync(setters =>
-                setters.SetProperty(c => c.LastReadMessageId, messageId));
+                setters
+                    .SetProperty(c => c.LastReadMessageId, messageId)
+                    .SetProperty(c => c.LastReadAt, now));
 
-        if (affectedRows > 0)
+        if (affectedRows == 0)
+        {
+            var exists = await _applicationContext.ChatParticipants
+                .AnyAsync(c => c.ChatId == chatId && c.UserId == userId);
+
+            if (!exists)
+            {
+                _logger.LogWarning(
+                    "Mark message as read failed: participant doesn't exist. ChatId: {ChatId}, UserId: {UserId}",
+                    chatId, userId);
+
+                throw new NotFoundException("User or chat is not found");
+            }
+
+            _logger.LogInformation(
+                "Mark as read skipped (already up to date). MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
+                messageId, chatId, userId);
+        }
+        else
         {
             _logger.LogInformation(
                 "Marked message as read. MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
                 messageId, chatId, userId);
-
-            return;
         }
         
-        var chatExists = await _applicationContext.ChatParticipants
-            .AnyAsync(c => c.ChatId == chatId && c.UserId == userId);
-
-        if (!chatExists)
+        return new MarkAsReadResponse
         {
-            _logger.LogWarning(
-                "Mark message as read failed: participant doesn't exist. ChatId: {ChatId}, UserId: {UserId}",
-                chatId, userId);
-
-            throw new NotFoundException("User or chat is not found");
-        }
-        
-        var messageExists = await _applicationContext.Messages
-            .AnyAsync(m => m.Id == messageId);
-
-        if (!messageExists)
-        {
-            _logger.LogWarning(
-                "Mark message as read failed: message not found. ChatId: {ChatId}, UserId: {UserId}, MessageId: {MessageId}",
-                chatId, userId, messageId);
-
-            throw new NotFoundException("Message not found");
-        }
-
-        _logger.LogInformation(
-            "Mark as read skipped (already up to date). MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
-            messageId, chatId, userId);
+            ReadAt = now,
+            SenderId = message.SenderId
+        };
     }
 }

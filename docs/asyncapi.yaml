@@ -58,6 +58,13 @@ channels:
       message:
         $ref: '#/components/messages/ReceiveMessageEvent'
 
+  chat/messageRead:
+    subscribe:
+      operationId: messageRead
+      summary: Receive notification that a message was read
+      message:
+        $ref: '#/components/messages/MessageReadEvent'
+
 components:
 
   messages:
@@ -91,6 +98,12 @@ components:
       contentType: application/json
       payload:
         $ref: '#/components/schemas/ReceiveMessagePayload'
+
+    MessageReadEvent:
+      name: MessageRead
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/MessageReadPayload'
 
   schemas:
 
@@ -153,6 +166,27 @@ components:
         content:
           type: string
         sentAt:
+          type: string
+          format: date-time
+
+    MessageReadPayload:
+      type: object
+      required:
+        - chatId
+        - messageId
+        - userId
+        - readAt
+      properties:
+        chatId:
+          type: string
+          format: uuid
+        messageId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        readAt:
           type: string
           format: date-time
 

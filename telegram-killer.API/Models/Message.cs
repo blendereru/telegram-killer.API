@@ -9,5 +9,5 @@ public class Message
     public User Sender { get; set; }
     public string Content { get; set; }
     public DateTimeOffset SentAt { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
 }

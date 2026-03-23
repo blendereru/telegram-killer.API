@@ -11,5 +11,5 @@ public interface IChatService
     
     Task<Message> StoreMessageAsync(Guid chatId, Guid senderId, string content);
     Task<bool> UserCanAccessChat(Guid userId, Guid chatId);
-    Task MarkAsRead(Guid chatId, Guid messageId, Guid userId);
+    Task<MarkAsReadResponse> MarkAsRead(Guid chatId, Guid messageId, Guid userId);
 }

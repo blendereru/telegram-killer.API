@@ -172,6 +172,48 @@
           }
         }
       }
+    },
+    "chat/messageRead": {
+      "subscribe": {
+        "operationId": "messageRead",
+        "summary": "Receive notification that a message was read",
+        "message": {
+          "name": "MessageRead",
+          "contentType": "application/json",
+          "payload": {
+            "type": "object",
+            "required": [
+              "chatId",
+              "messageId",
+              "userId",
+              "readAt"
+            ],
+            "properties": {
+              "chatId": {
+                "type": "string",
+                "format": "uuid",
+                "x-parser-schema-id": "<anonymous-schema-12>"
+              },
+              "messageId": {
+                "type": "string",
+                "format": "uuid",
+                "x-parser-schema-id": "<anonymous-schema-13>"
+              },
+              "userId": {
+                "type": "string",
+                "format": "uuid",
+                "x-parser-schema-id": "<anonymous-schema-14>"
+              },
+              "readAt": {
+                "type": "string",
+                "format": "date-time",
+                "x-parser-schema-id": "<anonymous-schema-15>"
+              }
+            },
+            "x-parser-schema-id": "MessageReadPayload"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -180,14 +222,16 @@
       "LeaveChatRequest": "$ref:$.channels.chat/leaveChat.publish.message",
       "SendMessageRequest": "$ref:$.channels.chat/sendMessage.publish.message",
       "MarkAsReadRequest": "$ref:$.channels.chat/markAsRead.publish.message",
-      "ReceiveMessageEvent": "$ref:$.channels.chat/receiveMessage.subscribe.message"
+      "ReceiveMessageEvent": "$ref:$.channels.chat/receiveMessage.subscribe.message",
+      "MessageReadEvent": "$ref:$.channels.chat/messageRead.subscribe.message"
     },
     "schemas": {
       "JoinChatPayload": "$ref:$.channels.chat/joinChat.publish.message.payload",
       "LeaveChatPayload": "$ref:$.channels.chat/leaveChat.publish.message.payload",
       "SendMessagePayload": "$ref:$.channels.chat/sendMessage.publish.message.payload",
       "MarkAsReadPayload": "$ref:$.channels.chat/markAsRead.publish.message.payload",
-      "ReceiveMessagePayload": "$ref:$.channels.chat/receiveMessage.subscribe.message.payload"
+      "ReceiveMessagePayload": "$ref:$.channels.chat/receiveMessage.subscribe.message.payload",
+      "MessageReadPayload": "$ref:$.channels.chat/messageRead.subscribe.message.payload"
     },
     "securitySchemes": {
       "bearerAuth": {

@@ -10,4 +10,5 @@ public class ChatParticipant
     public DateTimeOffset JoinedAt { get; set; }
 
     public Guid? LastReadMessageId { get; set; }
+    public DateTimeOffset? LastReadAt { get; set; }
 }
