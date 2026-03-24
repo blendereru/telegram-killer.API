@@ -140,6 +140,27 @@ public class ChatService : IChatService
 
         _applicationContext.Messages.Add(message);
         await _applicationContext.SaveChangesAsync();
+        
+        var affectedRows = await _applicationContext.ChatParticipants
+            .Where(cp => cp.ChatId == chatId && cp.UserId == senderId &&
+                         (cp.LastReadMessageId == null || cp.LastReadMessageId < message.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(cp => cp.LastReadMessageId, message.Id)
+                .SetProperty(cp => cp.LastReadAt, DateTimeOffset.UtcNow)
+            );
+
+        if (affectedRows > 0)
+        {
+            _logger.LogInformation(
+                "LastRead updated after sending message. Chat={ChatId} User={UserId} MessageId={MessageId}",
+                chatId, senderId, message.Id);
+        }
+        else
+        {
+            _logger.LogDebug(
+                "LastRead not updated (already ahead). Chat={ChatId} User={UserId} MessageId={MessageId}",
+                chatId, senderId, message.Id);
+        }
 
         _logger.LogInformation(
             "Message stored successfully. Chat={ChatId} Sender={SenderId} MessageId={MessageId}",
