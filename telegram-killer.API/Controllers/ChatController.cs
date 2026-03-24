@@ -42,7 +42,7 @@ public class ChatController : ControllerBase
             throw new UnauthorizedException("Invalid token");
         }
         
-        var chat = await _chatService.CreateDirectChatAsync(userGuid, request.OtherUserId);
+        var chat = await _chatService.CreateDirectChat(userGuid, request.OtherUserId);
 
         var chatResponse = new CreateChatResponse
         {
@@ -80,7 +80,7 @@ public class ChatController : ControllerBase
             throw new UnauthorizedException("Invalid token");
         }
 
-        var messages = await _chatService.GetMessagesAsync(chatId, userGuid);
+        var messages = await _chatService.GetMessages(chatId, userGuid);
 
         return Ok(messages);
     }

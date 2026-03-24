@@ -5,11 +5,11 @@ namespace telegram_killer.API.Services.Interfaces;
 
 public interface IChatService
 {
-    Task<Chat> CreateDirectChatAsync(Guid userA, Guid userB);
+    Task<Chat> CreateDirectChat(Guid userA, Guid userB);
     
-    Task<GetChatMessagesDto> GetMessagesAsync(Guid chatId, Guid userId);
+    Task<GetChatMessagesDto> GetMessages(Guid chatId, Guid userId);
     
-    Task<Message> StoreMessageAsync(Guid chatId, Guid senderId, string content);
+    Task<Message> StoreMessage(Guid chatId, Guid senderId, string content);
     Task<bool> UserCanAccessChat(Guid userId, Guid chatId);
     Task<MarkAsReadResponse> MarkAsRead(Guid chatId, Guid messageId, Guid userId);
 }

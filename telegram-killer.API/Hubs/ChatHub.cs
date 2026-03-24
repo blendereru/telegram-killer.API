@@ -75,7 +75,7 @@ public class ChatHub : Hub
             throw new HubException("Message cannot be empty.");
         }
 
-        var message = await _chatService.StoreMessageAsync(chatGuid, senderId, content);
+        var message = await _chatService.StoreMessage(chatGuid, senderId, content);
 
         await Clients.Group(chatId).SendAsync("ReceiveMessage", new
         {

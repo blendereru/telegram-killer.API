@@ -19,7 +19,7 @@ public class ChatService : IChatService
         _logger = logger;
     }
 
-    public async Task<Chat> CreateDirectChatAsync(Guid requesterId, Guid requestedId)
+    public async Task<Chat> CreateDirectChat(Guid requesterId, Guid requestedId)
     {
         if (requesterId == requestedId)
         {
@@ -78,7 +78,7 @@ public class ChatService : IChatService
         return chat;
     }
 
-    public async Task<GetChatMessagesDto> GetMessagesAsync(Guid chatId, Guid userId)
+    public async Task<GetChatMessagesDto> GetMessages(Guid chatId, Guid userId)
     {
         var chatData = await _applicationContext.ChatParticipants
             .Where(cp => cp.ChatId == chatId && cp.UserId == userId)
@@ -116,7 +116,7 @@ public class ChatService : IChatService
         };
     }
 
-    public async Task<Message> StoreMessageAsync(Guid chatId, Guid senderId, string content)
+    public async Task<Message> StoreMessage(Guid chatId, Guid senderId, string content)
     {
         var isParticipant = await _applicationContext.ChatParticipants
             .AnyAsync(cp => cp.ChatId == chatId && cp.UserId == senderId);
