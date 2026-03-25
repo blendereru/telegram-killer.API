@@ -18,9 +18,9 @@
     }
   },
   "channels": {
-    "chat/joinChat": {
+    "chat/JoinChat": {
       "publish": {
-        "operationId": "joinChat",
+        "operationId": "JoinChat",
         "summary": "Join a chat group",
         "message": {
           "name": "JoinChat",
@@ -42,9 +42,9 @@
         }
       }
     },
-    "chat/leaveChat": {
+    "chat/LeaveChat": {
       "publish": {
-        "operationId": "leaveChat",
+        "operationId": "LeaveChat",
         "summary": "Leave a chat group",
         "message": {
           "name": "LeaveChat",
@@ -66,9 +66,9 @@
         }
       }
     },
-    "chat/sendMessage": {
+    "chat/SendMessage": {
       "publish": {
-        "operationId": "sendMessage",
+        "operationId": "SendMessage",
         "summary": "Send a message to a chat group",
         "message": {
           "name": "SendMessage",
@@ -96,9 +96,9 @@
         }
       }
     },
-    "chat/markAsRead": {
+    "chat/MarkAsRead": {
       "publish": {
-        "operationId": "markAsRead",
+        "operationId": "MarkAsRead",
         "summary": "Mark a message as read",
         "message": {
           "name": "MarkAsRead",
@@ -126,9 +126,9 @@
         }
       }
     },
-    "chat/receiveMessage": {
+    "chat/ReceiveMessage": {
       "subscribe": {
-        "operationId": "receiveMessage",
+        "operationId": "ReceiveMessage",
         "summary": "Receive a message from a chat group",
         "message": {
           "name": "ReceiveMessage",
@@ -173,9 +173,9 @@
         }
       }
     },
-    "chat/messageRead": {
+    "chat/MessageRead": {
       "subscribe": {
-        "operationId": "messageRead",
+        "operationId": "MessageRead",
         "summary": "Receive notification that a message was read",
         "message": {
           "name": "MessageRead",
@@ -218,20 +218,20 @@
   },
   "components": {
     "messages": {
-      "JoinChatRequest": "$ref:$.channels.chat/joinChat.publish.message",
-      "LeaveChatRequest": "$ref:$.channels.chat/leaveChat.publish.message",
-      "SendMessageRequest": "$ref:$.channels.chat/sendMessage.publish.message",
-      "MarkAsReadRequest": "$ref:$.channels.chat/markAsRead.publish.message",
-      "ReceiveMessageEvent": "$ref:$.channels.chat/receiveMessage.subscribe.message",
-      "MessageReadEvent": "$ref:$.channels.chat/messageRead.subscribe.message"
+      "JoinChatRequest": "$ref:$.channels.chat/JoinChat.publish.message",
+      "LeaveChatRequest": "$ref:$.channels.chat/LeaveChat.publish.message",
+      "SendMessageRequest": "$ref:$.channels.chat/SendMessage.publish.message",
+      "MarkAsReadRequest": "$ref:$.channels.chat/MarkAsRead.publish.message",
+      "ReceiveMessageEvent": "$ref:$.channels.chat/ReceiveMessage.subscribe.message",
+      "MessageReadEvent": "$ref:$.channels.chat/MessageRead.subscribe.message"
     },
     "schemas": {
-      "JoinChatPayload": "$ref:$.channels.chat/joinChat.publish.message.payload",
-      "LeaveChatPayload": "$ref:$.channels.chat/leaveChat.publish.message.payload",
-      "SendMessagePayload": "$ref:$.channels.chat/sendMessage.publish.message.payload",
-      "MarkAsReadPayload": "$ref:$.channels.chat/markAsRead.publish.message.payload",
-      "ReceiveMessagePayload": "$ref:$.channels.chat/receiveMessage.subscribe.message.payload",
-      "MessageReadPayload": "$ref:$.channels.chat/messageRead.subscribe.message.payload"
+      "JoinChatPayload": "$ref:$.channels.chat/JoinChat.publish.message.payload",
+      "LeaveChatPayload": "$ref:$.channels.chat/LeaveChat.publish.message.payload",
+      "SendMessagePayload": "$ref:$.channels.chat/SendMessage.publish.message.payload",
+      "MarkAsReadPayload": "$ref:$.channels.chat/MarkAsRead.publish.message.payload",
+      "ReceiveMessagePayload": "$ref:$.channels.chat/ReceiveMessage.subscribe.message.payload",
+      "MessageReadPayload": "$ref:$.channels.chat/MessageRead.subscribe.message.payload"
     },
     "securitySchemes": {
       "bearerAuth": {

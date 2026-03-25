@@ -23,44 +23,44 @@ servers:
 
 channels:
 
-  chat/joinChat:
+  chat/JoinChat:
     publish:
-      operationId: joinChat
+      operationId: JoinChat
       summary: Join a chat group
       message:
         $ref: '#/components/messages/JoinChatRequest'
 
-  chat/leaveChat:
+  chat/LeaveChat:
     publish:
-      operationId: leaveChat
+      operationId: LeaveChat
       summary: Leave a chat group
       message:
         $ref: '#/components/messages/LeaveChatRequest'
 
-  chat/sendMessage:
+  chat/SendMessage:
     publish:
-      operationId: sendMessage
+      operationId: SendMessage
       summary: Send a message to a chat group
       message:
         $ref: '#/components/messages/SendMessageRequest'
 
-  chat/markAsRead:
+  chat/MarkAsRead:
     publish:
-      operationId: markAsRead
+      operationId: MarkAsRead
       summary: Mark a message as read
       message:
         $ref: '#/components/messages/MarkAsReadRequest'
 
-  chat/receiveMessage:
+  chat/ReceiveMessage:
     subscribe:
-      operationId: receiveMessage
+      operationId: ReceiveMessage
       summary: Receive a message from a chat group
       message:
         $ref: '#/components/messages/ReceiveMessageEvent'
 
-  chat/messageRead:
+  chat/MessageRead:
     subscribe:
-      operationId: messageRead
+      operationId: MessageRead
       summary: Receive notification that a message was read
       message:
         $ref: '#/components/messages/MessageReadEvent'

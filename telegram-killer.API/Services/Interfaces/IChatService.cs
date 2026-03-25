@@ -5,7 +5,7 @@ namespace telegram_killer.API.Services.Interfaces;
 
 public interface IChatService
 {
-    Task<Chat> CreateDirectChat(Guid userA, Guid userB);
+    Task<Chat> CreateDirectChat(Guid requesterId, Guid requestedId);
     
     Task<GetChatMessagesDto> GetMessages(Guid chatId, Guid userId);
     
