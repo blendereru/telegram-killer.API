@@ -42,7 +42,7 @@ public class ChatHub : Hub
         
         if (!await _chatService.UserCanAccessChat(userGuid, chatGuid))
         {
-            _logger.LogWarning("Chat join failed: user can't access chat. ChatId: {ChatId}, UserId: {UserId}", userGuid, userGuid);
+            _logger.LogWarning("Chat join failed: user can't access chat. ChatId: {ChatId}, UserId: {UserId}", chatGuid, userGuid);
             throw new HubException("You are not allowed to join this chat.");
         }
         
