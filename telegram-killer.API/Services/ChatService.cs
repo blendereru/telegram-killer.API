@@ -78,41 +78,73 @@ public class ChatService : IChatService
         return chat;
     }
 
-    public async Task<GetChatMessagesDto> GetMessages(Guid chatId, Guid userId)
+    public async Task<GetChatMessagesResponse> GetMessages(Guid chatId, Guid userId)
     {
-        var chatData = await _applicationContext.ChatParticipants
-            .Where(cp => cp.ChatId == chatId && cp.UserId == userId)
+        var participants = await _applicationContext.ChatParticipants
+            .AsNoTracking()
+            .Where(cp => cp.ChatId == chatId)
             .Select(cp => new
             {
-                cp.LastReadMessageId,
-                Messages = _applicationContext.Messages
-                    .Where(m => m.ChatId == chatId)
-                    .OrderBy(m => m.SentAt)
-                    .Select(m => new MessageDto
-                    {
-                        Id = m.Id,
-                        SenderId = m.SenderId,
-                        Content = m.Content,
-                        SentAt = m.SentAt
-                    })
-                    .ToList()
+                cp.UserId,
+                cp.LastReadMessageId
             })
-            .FirstOrDefaultAsync();
-
-        if (chatData == null)
+            .ToListAsync();
+        
+        if (participants.Count == 0)
         {
             _logger.LogWarning(
-                "Unauthorized chat access attempt. User={UserId} Chat={ChatId}",
+                "Messages retrieval failed: Chat not found or has no participants. Chat={ChatId}",
+                chatId);
+
+            throw new NotFoundException($"Chat {chatId} not found.");
+        }
+        
+        var currentUser = participants.FirstOrDefault(p => p.UserId == userId);
+
+        if (currentUser == null)
+        {
+            _logger.LogWarning(
+                "Message retrieval failed: Unauthorized access attempt. User={UserId} Chat={ChatId}",
                 userId, chatId);
 
             throw new ForbiddenException("User is not a participant of this chat.");
         }
-
-        return new GetChatMessagesDto
+        
+        var messages = await _applicationContext.Messages
+            .AsNoTracking()
+            .Where(m => m.ChatId == chatId)
+            .OrderBy(m => m.SentAt)
+            .Select(m => new MessageDto
+            {
+                Id = m.Id,
+                SenderId = m.SenderId,
+                Content = m.Content,
+                SentAt = m.SentAt
+            })
+            .ToListAsync();
+        
+        var otherParticipants = participants
+            .Where(p => p.UserId != userId)
+            .Select(p => new ParticipantReadDto
+            {
+                UserId = p.UserId,
+                LastReadMessageId = p.LastReadMessageId
+            })
+            .ToList();
+        
+        _logger.LogInformation(
+            "Messages retrieved successfully. Chat={ChatId}, User={UserId}, Messages={MessageCount}, Participants={ParticipantCount}",
+            chatId,
+            userId,
+            messages.Count,
+            participants.Count);
+        
+        return new GetChatMessagesResponse
         {
             ChatId = chatId,
-            Messages = chatData.Messages,
-            LastReadMessageId = chatData.LastReadMessageId
+            Messages = messages,
+            LastReadMessageId = currentUser.LastReadMessageId,
+            OtherParticipantReadStates = otherParticipants
         };
     }
 

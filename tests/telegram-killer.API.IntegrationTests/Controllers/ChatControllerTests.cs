@@ -612,7 +612,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesResponse>();
 
         Assert.NotNull(chatMessages);
         Assert.NotNull(chatMessages.Messages);
@@ -723,7 +723,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+        var chatMessages = await response.Content.ReadFromJsonAsync<GetChatMessagesResponse>();
 
         Assert.NotNull(chatMessages);
         Assert.NotNull(chatMessages.Messages);
@@ -825,7 +825,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var apiResult = await response.Content.ReadFromJsonAsync<GetChatMessagesDto>();
+        var apiResult = await response.Content.ReadFromJsonAsync<GetChatMessagesResponse>();
         Assert.NotNull(apiResult);
         
         using (var scope = _factory.CreateScope())
