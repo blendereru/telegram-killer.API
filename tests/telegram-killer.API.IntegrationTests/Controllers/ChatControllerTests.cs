@@ -436,7 +436,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
     }
 
     [Fact]
-    public async Task GetMessages_NonExistentChat_Returns403ForbiddenWithProblemDetails()
+    public async Task GetMessages_NonExistentChat_Returns404NotFoundWithProblemDetails()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -471,9 +471,9 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
         
         // Assert
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
-        await TestHelpers.AssertProblemDetails(response);
+        await TestHelpers.AssertProblemDetails(response, "not found");
     }
 
     [Fact]
@@ -483,9 +483,9 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         var client = _factory.CreateClient();
 
         string accessToken;
-        var nonExistentChatId = Guid.NewGuid();
         const string chatParticipant1Email = "participant1@example.com";
         const string chatParticipant2Email = "participant2@example.com";
+        Guid chatId;
         
         using (var scope = _factory.CreateScope())
         {
@@ -531,6 +531,8 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
 
             context.Chats.Add(chat);
             await context.SaveChangesAsync();
+
+            chatId = chat.Id;
             
             var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
             
@@ -541,7 +543,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
         
         // Act
-        var response = await client.GetAsync($"api/chat/{nonExistentChatId}/messages");
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
         
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -618,6 +620,8 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.NotNull(chatMessages.Messages);
         Assert.Null(chatMessages.LastReadMessageId);
         Assert.Empty(chatMessages.Messages);
+        Assert.NotNull(chatMessages.OtherParticipantReadStates);
+        Assert.True(chatMessages.OtherParticipantReadStates.All(x => x.LastReadMessageId == null));
 
         using (var scope = _factory.CreateScope())
         {
@@ -741,6 +745,111 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Assert.Equal(user.Id, chatMessages.Messages[0].SenderId);
         Assert.Equal(anotherParticipant.Id, chatMessages.Messages[1].SenderId);
         Assert.Equal(user.Id, chatMessages.Messages[2].SenderId);
+    }
+
+    [Fact]
+    public async Task GetMessages_ParticipantsReadDifferentMessages_ReturnsValidReadStates()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid chatId;
+
+        User user;
+        User anotherParticipant;
+
+        Guid m1Id;
+        Guid m2Id;
+        Guid m3Id;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            anotherParticipant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+            
+            var m1 = await chatService.StoreMessage(chatId, user.Id, "Hello!");
+            var m2 = await chatService.StoreMessage(chatId, anotherParticipant.Id, "Hi there!");
+            var m3 = await chatService.StoreMessage(chatId, user.Id, "How are you?");
+
+            m1Id = m1.Id;
+            m2Id = m2.Id;
+            m3Id = m3.Id;
+            
+            await chatService.MarkAsRead(chatId, m2.Id, user.Id);
+            await chatService.MarkAsRead(chatId, m3.Id, anotherParticipant.Id);
+
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}/messages");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<GetChatMessagesResponse>();
+
+        Assert.NotNull(result);
+        
+        Assert.Equal(3, result.Messages.Count);
+
+        Assert.Collection(result.Messages,
+            m => Assert.Equal(m1Id, m.Id),
+            m => Assert.Equal(m2Id, m.Id),
+            m => Assert.Equal(m3Id, m.Id)
+        );
+        
+        Assert.Equal(m2Id, result.LastReadMessageId);
+        
+        Assert.Single(result.OtherParticipantReadStates);
+
+        var other = result.OtherParticipantReadStates.First();
+
+        Assert.Equal(anotherParticipant.Id, other.UserId);
+        
+        Assert.Equal(m3Id, other.LastReadMessageId);
+        
+        Assert.NotEqual(result.LastReadMessageId, other.LastReadMessageId);
     }
     
     [Fact]
