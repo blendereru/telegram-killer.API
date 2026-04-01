@@ -164,7 +164,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
     }
 
     [Fact]
-    public async Task CreateDirect_OtherUserEmailNotConfirmed_Returns403ForbiddenWithProblemDetails()
+    public async Task CreateDirect_OtherUserEmailNotConfirmed_Returns404NotFoundWithProblemDetails()
     {
         // Arrange
         var client = _factory.CreateClient();
