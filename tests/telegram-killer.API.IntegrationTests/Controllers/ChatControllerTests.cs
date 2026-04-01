@@ -164,6 +164,59 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
     }
 
     [Fact]
+    public async Task CreateDirect_OtherUserEmailNotConfirmed_Returns403ForbiddenWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        const string otherUserEmail = "nonconfirmed@example.com";
+        Guid otherUserId;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var otherUser = new User
+            {
+                Email = otherUserEmail,
+                Username = otherUserEmail,
+                IsEmailConfirmed = false,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+            context.Users.AddRange(user, otherUser);
+            await context.SaveChangesAsync();
+            
+            otherUserId = otherUser.Id;
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        var request = new CreateChatRequest
+        {
+            OtherUserId = otherUserId
+        };
+        
+        client.DefaultRequestHeaders.Authorization = 
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.PostAsJsonAsync("api/chat", request);
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await TestHelpers.AssertProblemDetails(response, "not found");
+    }
+    
+    [Fact]
     public async Task CreateDirect_ChatAlreadyExists_Returns200Ok()
     {
         // Arrange
