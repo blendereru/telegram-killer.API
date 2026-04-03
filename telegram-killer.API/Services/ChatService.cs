@@ -12,7 +12,7 @@ public class ChatService : IChatService
 {
     private readonly ApplicationContext _applicationContext;
     private readonly ILogger<ChatService> _logger;
-    
+
     public ChatService(ApplicationContext applicationContext, ILogger<ChatService> logger)
     {
         _applicationContext = applicationContext;
@@ -26,18 +26,20 @@ public class ChatService : IChatService
             _logger.LogWarning("Attempted to create a chat with oneself. Requested: {RequestedId}", requestedId);
             throw new ValidationException("Cannot create a chat with yourself");
         }
-        
+
         var targetUser = await _applicationContext.Users
             .Where(u => u.Id == requestedId)
             .Select(u => new { u.Id, u.IsEmailConfirmed })
             .FirstOrDefaultAsync();
-        
+
         if (targetUser == null || !targetUser.IsEmailConfirmed)
         {
-            _logger.LogWarning("Chat creation failed: Requested user does not exist or has non-confirmed email. RequesterId: {RequesterId}", requesterId);
+            _logger.LogWarning(
+                "Chat creation failed: Requested user does not exist or has non-confirmed email. RequesterId: {RequesterId}",
+                requesterId);
             throw new NotFoundException("Requested user is not found");
         }
-        
+
         var existingChat = await _applicationContext.Chats
             .AsNoTracking()
             .Where(c => c.Type == ChatType.Direct)
@@ -47,10 +49,12 @@ public class ChatService : IChatService
 
         if (existingChat != null)
         {
-            _logger.LogInformation("Chat already exists between users. Returning existing chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}", existingChat.Id, requesterId, requestedId);
+            _logger.LogInformation(
+                "Chat already exists between users. Returning existing chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}",
+                existingChat.Id, requesterId, requestedId);
             return existingChat;
         }
-        
+
         var chat = new Chat
         {
             Type = ChatType.Direct,
@@ -67,11 +71,15 @@ public class ChatService : IChatService
         try
         {
             await _applicationContext.SaveChangesAsync();
-            _logger.LogInformation("Successfully created a new direct chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}", chat.Id, requesterId, requestedId);
+            _logger.LogInformation(
+                "Successfully created a new direct chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}",
+                chat.Id, requesterId, requestedId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred while saving new chat to database. RequesterId: {RequesterId}, RequestedId: {RequestedId}", requesterId, requestedId);
+            _logger.LogError(ex,
+                "Error occurred while saving new chat to database. RequesterId: {RequesterId}, RequestedId: {RequestedId}",
+                requesterId, requestedId);
             throw;
         }
 
@@ -89,7 +97,7 @@ public class ChatService : IChatService
                 cp.LastReadMessageId
             })
             .ToListAsync();
-        
+
         if (participants.Count == 0)
         {
             _logger.LogWarning(
@@ -98,7 +106,7 @@ public class ChatService : IChatService
 
             throw new NotFoundException($"Chat {chatId} not found.");
         }
-        
+
         var currentUser = participants.FirstOrDefault(p => p.UserId == userId);
 
         if (currentUser == null)
@@ -109,7 +117,7 @@ public class ChatService : IChatService
 
             throw new ForbiddenException("User is not a participant of this chat.");
         }
-        
+
         var messages = await _applicationContext.Messages
             .AsNoTracking()
             .Where(m => m.ChatId == chatId)
@@ -122,8 +130,8 @@ public class ChatService : IChatService
                 SentAt = m.SentAt
             })
             .ToListAsync();
-        
-        var otherParticipants = participants
+
+        var otherParticipantReadStates = participants
             .Where(p => p.UserId != userId)
             .Select(p => new ParticipantReadDto
             {
@@ -131,20 +139,20 @@ public class ChatService : IChatService
                 LastReadMessageId = p.LastReadMessageId
             })
             .ToList();
-        
+
         _logger.LogInformation(
             "Messages retrieved successfully. Chat={ChatId}, User={UserId}, Messages={MessageCount}, Participants={ParticipantCount}",
             chatId,
             userId,
             messages.Count,
             participants.Count);
-        
+
         return new GetChatMessagesResponse
         {
             ChatId = chatId,
             Messages = messages,
             LastReadMessageId = currentUser.LastReadMessageId,
-            OtherParticipantReadStates = otherParticipants
+            OtherParticipantReadStates = otherParticipantReadStates
         };
     }
 
@@ -172,7 +180,7 @@ public class ChatService : IChatService
 
         _applicationContext.Messages.Add(message);
         await _applicationContext.SaveChangesAsync();
-        
+
         var affectedRows = await _applicationContext.ChatParticipants
             .Where(cp => cp.ChatId == chatId && cp.UserId == senderId &&
                          (cp.LastReadMessageId == null || cp.LastReadMessageId < message.Id))
@@ -231,7 +239,7 @@ public class ChatService : IChatService
 
             throw new NotFoundException("Message not found");
         }
-        
+
         var affectedRows = await _applicationContext.ChatParticipants
             .Where(c =>
                 c.ChatId == chatId &&
@@ -266,7 +274,7 @@ public class ChatService : IChatService
                 "Marked message as read. MessageId: {MessageId}, ChatId: {ChatId}, UserId: {UserId}",
                 messageId, chatId, userId);
         }
-        
+
         return new MarkAsReadResponse
         {
             ReadAt = now,

@@ -36,12 +36,12 @@ public class TokensProviderServiceTests
         // Assert
         Assert.Throws<ArgumentNullException>(() => _service.GenerateAccessToken(null!));
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldSetEmailConfirmedFalse()
     {
         // Arrange
-        
+
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -60,7 +60,7 @@ public class TokensProviderServiceTests
 
         Assert.Equal("False", claim.Value);
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldUseHmacSha256()
     {
@@ -76,7 +76,7 @@ public class TokensProviderServiceTests
 
         Assert.Equal(SecurityAlgorithms.HmacSha256, jwt.GetHeaderValue<string>("alg"));
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldSetSubjectToUserId()
     {
@@ -94,7 +94,7 @@ public class TokensProviderServiceTests
 
         Assert.Equal(user.Id.ToString(), subject.Value);
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldGenerateDifferentTokens()
     {
@@ -120,7 +120,7 @@ public class TokensProviderServiceTests
         // Assert
         Assert.NotEqual(token1, token2);
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldThrow_WhenSecretIsInvalid()
     {
@@ -132,7 +132,7 @@ public class TokensProviderServiceTests
             Lifetime = 60,
             Key = ""
         });
-        
+
         var service = new TokensProviderService(options, _loggerMock.Object);
 
         var user = CreateUser();
@@ -140,7 +140,7 @@ public class TokensProviderServiceTests
         // Assert
         Assert.ThrowsAny<Exception>(() => service.GenerateAccessToken(user));
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldReturnToken()
     {
@@ -154,7 +154,7 @@ public class TokensProviderServiceTests
         Assert.NotNull(token);
         Assert.NotEmpty(token);
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldContainCorrectClaims()
     {
@@ -180,7 +180,7 @@ public class TokensProviderServiceTests
             c.Type == "email_confirmed" &&
             c.Value == user.IsEmailConfirmed.ToString());
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldContainIssuerAndAudience()
     {
@@ -197,7 +197,7 @@ public class TokensProviderServiceTests
         Assert.Equal(_options.Issuer, jwt.Issuer);
         Assert.Equal(_options.Audience, jwt.Audiences.First());
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldSetExpiration()
     {
@@ -217,7 +217,7 @@ public class TokensProviderServiceTests
 
         Assert.True(jwt.ValidTo <= expectedExpiration.AddSeconds(5));
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldLogInformation()
     {
@@ -237,7 +237,7 @@ public class TokensProviderServiceTests
                 It.IsAny<Func<It.IsAnyType, Exception, string>>()!),
             Times.Once);
     }
-    
+
     [Fact]
     public void GenerateAccessToken_ShouldReturnValidJwt()
     {
@@ -252,7 +252,7 @@ public class TokensProviderServiceTests
 
         Assert.True(handler.CanReadToken(token));
     }
-    
+
     [Fact]
     public void GenerateRefreshToken_ShouldReturnToken()
     {
@@ -275,7 +275,7 @@ public class TokensProviderServiceTests
 
         Assert.NotNull(bytes);
     }
-    
+
     [Fact]
     public void GenerateRefreshToken_ShouldGenerate32Bytes()
     {
@@ -287,7 +287,7 @@ public class TokensProviderServiceTests
 
         Assert.Equal(32, bytes.Length);
     }
-    
+
     private User CreateUser()
     {
         return new User

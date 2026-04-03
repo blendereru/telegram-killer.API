@@ -17,6 +17,7 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
     private readonly PostgreSqlContainer _dbContainer;
     private Respawner? _respawner;
     private DbConnection _dbConnection = null!;
+
     public TelegramKillerWebApplicationFactory()
     {
         _dbContainer = new PostgreSqlBuilder("postgres:16-alpine").Build();
@@ -25,16 +26,16 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
     public async Task InitializeAsync()
     {
         await _dbContainer.StartAsync();
-        
+
         using (var scope = Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
             await db.Database.MigrateAsync();
         }
-        
+
         _dbConnection = new NpgsqlConnection(_dbContainer.GetConnectionString());
         await _dbConnection.OpenAsync();
-        
+
         _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
@@ -49,7 +50,7 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
             await _respawner.ResetAsync(_dbConnection);
         }
     }
-    
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices(services =>
@@ -66,14 +67,15 @@ public class TelegramKillerWebApplicationFactory : WebApplicationFactory<Program
             {
                 options.UseNpgsql(_dbContainer.GetConnectionString());
             });
-            
-            var emailSenderServiceDescriptor = services.SingleOrDefault(s => 
+
+            var emailSenderServiceDescriptor = services.SingleOrDefault(s =>
                 s.ServiceType == typeof(IEmailSenderService));
 
             if (emailSenderServiceDescriptor != null)
             {
                 services.Remove(emailSenderServiceDescriptor);
             }
+
             services.AddScoped<IEmailSenderService, FakeEmailSenderService>();
         });
     }

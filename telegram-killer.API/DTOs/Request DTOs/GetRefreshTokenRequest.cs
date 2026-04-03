@@ -4,6 +4,5 @@ namespace telegram_killer.API.DTOs.Request_DTOs;
 
 public class GetRefreshTokenRequest
 {
-    [Required]
-    public string RefreshToken { get; set; }
+    [Required] public string RefreshToken { get; set; }
 }

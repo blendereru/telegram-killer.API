@@ -4,6 +4,5 @@ namespace telegram_killer.API.DTOs.Request_DTOs;
 
 public class CreateChatRequest
 {
-    [Required]
-    public Guid OtherUserId { get; set; }
+    [Required] public Guid OtherUserId { get; set; }
 }

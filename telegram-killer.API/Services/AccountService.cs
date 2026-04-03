@@ -15,7 +15,7 @@ public class AccountService : IAccountService
     private readonly IHasherService _hasherService;
     private readonly ITokensProviderService _tokensProviderService;
     private readonly IHttpContextAccessor _httpContextAccessor;
-    
+
     public AccountService(ApplicationContext applicationContext, ILogger<AccountService> logger,
         IEmailSenderService emailSenderService, IHasherService hasherService,
         ITokensProviderService tokensProviderService, IHttpContextAccessor httpContextAccessor)
@@ -27,7 +27,7 @@ public class AccountService : IAccountService
         _tokensProviderService = tokensProviderService;
         _httpContextAccessor = httpContextAccessor;
     }
-    
+
     public async Task<User> RegisterUserAsync(string email)
     {
         var existingUser = await _applicationContext.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -37,11 +37,12 @@ public class AccountService : IAccountService
             {
                 return existingUser;
             }
-            
-            _logger.LogWarning("User registration failed: user with the same email already exists. UserId: {UserId}", existingUser.Id);
+
+            _logger.LogWarning("User registration failed: user with the same email already exists. UserId: {UserId}",
+                existingUser.Id);
             throw new AlreadyExistsException("User with the same email already exists");
         }
-        
+
         var newUser = new User
         {
             Email = email,
@@ -50,13 +51,13 @@ public class AccountService : IAccountService
             RegisteredAt = DateTimeOffset.UtcNow
         };
         _applicationContext.Users.Add(newUser);
-        
+
         await _applicationContext.SaveChangesAsync();
-        
+
         _logger.LogInformation("New user registered. UserId: {UserId}", newUser.Id);
-        
+
         await _emailSenderService.SendEmailConfirmationCodeAsync(newUser);
-        
+
         return newUser;
     }
 
@@ -71,21 +72,22 @@ public class AccountService : IAccountService
         }
 
         _logger.LogInformation("User with Id {UserId} is logging in...", user.Id);
-        
+
         await _emailSenderService.SendEmailConfirmationCodeAsync(user);
-        
-        _logger.LogInformation("User with Id {UserId} has successfully logged in. Waiting for email confirmation", user.Id);
+
+        _logger.LogInformation("User with Id {UserId} has successfully logged in. Waiting for email confirmation",
+            user.Id);
     }
 
     public async Task<AuthResult> RefreshTokensAsync(string refreshToken)
     {
-        var httpContext = _httpContextAccessor.HttpContext 
-            ?? throw new ApplicationException("Http request context not found");
+        var httpContext = _httpContextAccessor.HttpContext
+                          ?? throw new ApplicationException("Http request context not found");
 
         var refreshSession = await _applicationContext.RefreshSessions
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.RefreshToken == refreshToken);
-        
+
         if (refreshSession == null || refreshSession.ExpiresAt < DateTimeOffset.UtcNow)
         {
             _logger.LogWarning("Refresh tokens failed: token expired or not found.");
@@ -99,20 +101,20 @@ public class AccountService : IAccountService
             _logger.LogWarning("Refresh tokens failed: User email is not confirmed. UserId: {UserId}", user.Id);
             throw new EmailNotConfirmedException("Email address must be verified before refreshing tokens.");
         }
-        
+
         var currentIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
         if (refreshSession.Ip != currentIp)
         {
             _logger.LogWarning("Refresh tokens failed: IP mismatch for User: {UserId}", refreshSession.UserId);
             throw new UnauthorizedException("Invalid session.");
         }
-        
+
         var authResult = new AuthResult
         {
             AccessToken = _tokensProviderService.GenerateAccessToken(user),
             RefreshToken = _tokensProviderService.GenerateRefreshToken()
         };
-        
+
         await using var transaction = await _applicationContext.Database.BeginTransactionAsync();
         try
         {
@@ -123,7 +125,9 @@ public class AccountService : IAccountService
 
             if (sessionCount >= 5)
             {
-                _logger.LogInformation("Session limit reached during tokens refresh. Nuking all sessions for User: {UserId}", refreshSession.UserId);
+                _logger.LogInformation(
+                    "Session limit reached during tokens refresh. Nuking all sessions for User: {UserId}",
+                    refreshSession.UserId);
                 _applicationContext.RefreshSessions.RemoveRange(activeSessions);
             }
             else
@@ -132,9 +136,9 @@ public class AccountService : IAccountService
             }
 
             await _applicationContext.SaveChangesAsync();
-            
+
             await CreateRefreshSessionAsync(refreshSession.UserId, authResult);
-            
+
             await transaction.CommitAsync();
         }
         catch (Exception ex)
@@ -150,7 +154,7 @@ public class AccountService : IAccountService
     public async Task<AuthResult> ConfirmEmailAndSignInAsync(string email, string confirmationCode)
     {
         var user = await ConfirmEmailAsync(email, confirmationCode);
-        
+
         var authResult = new AuthResult
         {
             AccessToken = _tokensProviderService.GenerateAccessToken(user),
@@ -165,7 +169,7 @@ public class AccountService : IAccountService
     {
         var refreshSession = await _applicationContext.RefreshSessions
             .FirstOrDefaultAsync(r => r.RefreshToken == refreshToken);
-        
+
         if (refreshSession == null)
         {
             _logger.LogWarning("Logout attempted with non-existent token.");
@@ -174,14 +178,14 @@ public class AccountService : IAccountService
 
         if (refreshSession.UserId != userId)
         {
-            _logger.LogCritical("Security Breach: User {UserId} tried to revoke token for User {OwnerId}", 
+            _logger.LogCritical("Security Breach: User {UserId} tried to revoke token for User {OwnerId}",
                 userId, refreshSession.UserId);
             throw new ForbiddenException("You do not have permission to revoke this session.");
         }
-        
+
         _applicationContext.RefreshSessions.Remove(refreshSession);
         await _applicationContext.SaveChangesAsync();
-        
+
         _logger.LogInformation("Logout completed successfully. UserId: {UserId}", refreshSession.UserId);
     }
 
@@ -204,7 +208,7 @@ public class AccountService : IAccountService
         }
 
         _logger.LogInformation("User information successfully retrieved. UserId: {UserId}", user.Id);
-        
+
         return user;
     }
 
@@ -216,21 +220,26 @@ public class AccountService : IAccountService
 
         if (requester == null)
         {
-            _logger.LogWarning("User information retrieve failed: Requester with Id {RequesterId} not found", requesterId);
+            _logger.LogWarning("User information retrieve failed: Requester with Id {RequesterId} not found",
+                requesterId);
             throw new UnauthorizedException("You are not authorized to perform this action");
         }
-        
-        var requested =  await _applicationContext.Users
+
+        var requested = await _applicationContext.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email);
 
         if (requested == null)
         {
-            _logger.LogWarning("User information retrieve failed: Requested user email not found. RequesterId: {RequesterId}", requester.Id);
+            _logger.LogWarning(
+                "User information retrieve failed: Requested user email not found. RequesterId: {RequesterId}",
+                requester.Id);
             throw new NotFoundException("User with the specified email not found.");
         }
-        
-        _logger.LogInformation("User information successfully retrieved. RequesterId: {RequesterId}, RequestedId: {RequestedId}", requester.Id, requested.Id);
+
+        _logger.LogInformation(
+            "User information successfully retrieved. RequesterId: {RequesterId}, RequestedId: {RequestedId}",
+            requester.Id, requested.Id);
 
         return new GetUserInformationResponse
         {
@@ -248,14 +257,14 @@ public class AccountService : IAccountService
                 c.ExpiresAt > DateTimeOffset.UtcNow)
             .OrderByDescending(c => c.CreatedAt)
             .FirstOrDefaultAsync();
-        
+
         if (code == null)
         {
             _logger.LogWarning(
                 "Email confirmation failed: code not found.");
             throw new NotFoundException("The user email or confirmation code is invalid");
         }
-        
+
         var userId = code.User.Id;
 
         if (!_hasherService.VerifyConfirmationCode(
@@ -267,9 +276,9 @@ public class AccountService : IAccountService
                 userId);
             throw new NotFoundException("The user email or confirmation code is invalid");
         }
-        
+
         code.User.IsEmailConfirmed = true;
-        
+
         _applicationContext.EmailConfirmationCodes.RemoveRange(
             _applicationContext.EmailConfirmationCodes
                 .Where(c => c.UserId == userId));
@@ -279,7 +288,7 @@ public class AccountService : IAccountService
         _logger.LogInformation(
             "Email confirmed successfully. UserId={UserId}",
             userId);
-        
+
         return code.User;
     }
 
@@ -292,7 +301,7 @@ public class AccountService : IAccountService
             _logger.LogWarning("HttpContext object not found");
             throw new ApplicationException("Http request context not found");
         }
-        
+
         var refreshSession = new RefreshSession
         {
             RefreshToken = result.RefreshToken,
@@ -302,10 +311,10 @@ public class AccountService : IAccountService
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow
         };
-        
+
         _applicationContext.RefreshSessions.Add(refreshSession);
         await _applicationContext.SaveChangesAsync();
-        
+
         _logger.LogInformation("Refresh session created successfully for user with Id {UserId}", userId);
     }
 }

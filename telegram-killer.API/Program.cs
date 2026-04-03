@@ -33,7 +33,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             throw new ApplicationException("JWT configuration options not found");
         }
-        
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateAudience = true,
@@ -46,10 +46,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("ConfirmedEmails", policy =>
-    {
-        policy.RequireClaim("email_confirmed", "True");
-    });
+    .AddPolicy("ConfirmedEmails", policy => { policy.RequireClaim("email_confirmed", "True"); });
 builder.Services.AddProblemDetails(configure =>
 {
     configure.CustomizeProblemDetails = context =>
@@ -84,6 +81,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
 app.UseSerilogRequestLogging();
 app.UseProblemDetailsException();
 app.UseAuthentication();
@@ -93,4 +91,6 @@ app.MapControllers();
 app.MapHub<ChatHub>("hub/chat");
 app.Run();
 
-public partial class Program { }
+public partial class Program
+{
+}

@@ -13,16 +13,17 @@ public class TokensProviderService : ITokensProviderService
 {
     private readonly JwtConfigurationOptions _jwtConfigurationOptions;
     private readonly ILogger<TokensProviderService> _logger;
+
     public TokensProviderService(IOptions<JwtConfigurationOptions> options, ILogger<TokensProviderService> logger)
     {
         _jwtConfigurationOptions = options.Value;
         _logger = logger;
     }
-    
+
     public string GenerateAccessToken(User user)
     {
         ArgumentNullException.ThrowIfNull(user);
-        
+
         var credentials = new SigningCredentials(_jwtConfigurationOptions.GetSymmetricSecurityKey(),
             SecurityAlgorithms.HmacSha256);
 
@@ -32,7 +33,7 @@ public class TokensProviderService : ITokensProviderService
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new("email_confirmed", user.IsEmailConfirmed.ToString())
         };
-        
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
@@ -41,13 +42,13 @@ public class TokensProviderService : ITokensProviderService
             Issuer = _jwtConfigurationOptions.Issuer,
             Audience = _jwtConfigurationOptions.Audience,
         };
-        
+
         var handler = new JsonWebTokenHandler();
-        
+
         var token = handler.CreateToken(tokenDescriptor);
 
         _logger.LogInformation("Access token generated for User with Id {UserId}", user.Id);
-        
+
         return token;
     }
 

@@ -16,13 +16,13 @@ public class ChatController : ControllerBase
 {
     private readonly IChatService _chatService;
     private readonly ILogger<ChatController> _logger;
-    
+
     public ChatController(IChatService chatService, ILogger<ChatController> logger)
     {
         _chatService = chatService;
         _logger = logger;
     }
-    
+
     [EndpointSummary("Create a direct chat(conversation) with user")]
     [EndpointDescription("Create a direct chat with user providing wanted user's id in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -35,13 +35,13 @@ public class ChatController : ControllerBase
     public async Task<IActionResult> CreateDirect(CreateChatRequest request)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
+
         if (!Guid.TryParse(userId, out var userGuid))
         {
             _logger.LogWarning("Invalid UserId format in JWT token");
             throw new UnauthorizedException("Invalid token");
         }
-        
+
         var chat = await _chatService.CreateDirectChat(userGuid, request.OtherUserId);
 
         var chatResponse = new CreateChatResponse
@@ -49,7 +49,7 @@ public class ChatController : ControllerBase
             ChatId = chat.Id,
             CreatedAt = chat.CreatedAt
         };
-        
+
         if (chat.Participants.Count == 0)
         {
             chatResponse.Participants = [userGuid, request.OtherUserId];
@@ -59,10 +59,10 @@ public class ChatController : ControllerBase
         chatResponse.Participants = chat.Participants.Select(p => p.UserId).ToList();
 
         var location = $"api/chat/{chat.Id}"; // refactor later.
-        
+
         return Created(location, chatResponse);
     }
-    
+
     [EndpointSummary("Retrieve messages for a specific chat")]
     [EndpointDescription("Returns all messages belonging to the specified chat")]
     [ProducesResponseType<GetChatMessagesResponse>(StatusCodes.Status200OK)]
@@ -73,7 +73,7 @@ public class ChatController : ControllerBase
     public async Task<IActionResult> GetMessages([Required] Guid chatId)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
+
         if (!Guid.TryParse(userId, out var userGuid))
         {
             _logger.LogWarning("Invalid UserId format in JWT token");

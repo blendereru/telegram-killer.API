@@ -10,7 +10,7 @@ public sealed class ProblemDetailsExceptionMiddleware
     private readonly RequestDelegate _next;
     private readonly IProblemDetailsService _problemDetailsService;
     private readonly ILogger<ProblemDetailsExceptionMiddleware> _logger;
-    
+
     public ProblemDetailsExceptionMiddleware(RequestDelegate next, IProblemDetailsService problemDetailsService,
         ILogger<ProblemDetailsExceptionMiddleware> logger)
     {
@@ -44,9 +44,9 @@ public sealed class ProblemDetailsExceptionMiddleware
         {
             Instance = $"{context.Request.Method} {context.Request.Path}"
         };
-        
+
         DecorateProblemDetails(problemDetails, exception);
-        
+
         var problemDetailsContext = new ProblemDetailsContext
         {
             HttpContext = context,
@@ -61,7 +61,7 @@ public sealed class ProblemDetailsExceptionMiddleware
     private void DecorateProblemDetails(ProblemDetails problemDetails, Exception exception)
     {
         problemDetails.Title = exception.Message;
-        
+
         if (exception.GetType() == typeof(NotFoundException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.5";
@@ -95,7 +95,7 @@ public sealed class ProblemDetailsExceptionMiddleware
                 problemDetails.Extensions["errors"] = errors;
                 problemDetails.Title = "One or more validation errors occurred.";
             }
-            
+
             problemDetails.Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1";
             problemDetails.Status = StatusCodes.Status400BadRequest;
         }
@@ -109,7 +109,8 @@ public sealed class ProblemDetailsExceptionMiddleware
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.10";
             problemDetails.Status = StatusCodes.Status409Conflict;
         }
-        else if (exception.GetType() == typeof(ForbiddenException) || exception.GetType() == typeof(EmailNotConfirmedException))
+        else if (exception.GetType() == typeof(ForbiddenException) ||
+                 exception.GetType() == typeof(EmailNotConfirmedException))
         {
             problemDetails.Type = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.4";
             problemDetails.Status = StatusCodes.Status403Forbidden;

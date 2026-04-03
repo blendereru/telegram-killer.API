@@ -16,7 +16,7 @@ public class EmailSenderService : IEmailSenderService
     private readonly ILogger<EmailSenderService> _logger;
     private readonly EmailSettings _emailSettings;
     private readonly IHasherService _hasherService;
-    
+
     public EmailSenderService(ApplicationContext applicationContext, ILogger<EmailSenderService> logger,
         IOptions<EmailSettings> emailSettingsOptions, IHasherService hasherService)
     {
@@ -25,19 +25,19 @@ public class EmailSenderService : IEmailSenderService
         _emailSettings = emailSettingsOptions.Value;
         _hasherService = hasherService;
     }
-    
+
     public async Task SendEmailConfirmationCodeAsync(User user)
     {
         var code = RandomNumberGenerator.GetInt32(1000000, 10000000).ToString();
-        
+
         var message = new MimeMessage();
-        
+
         message.From.Add(new MailboxAddress(
             _emailSettings.FromName,
             _emailSettings.FromEmail));
-        
+
         message.To.Add(MailboxAddress.Parse(user.Email));
-        
+
         message.Body = new BodyBuilder
         {
             HtmlBody = $@"
@@ -61,7 +61,7 @@ public class EmailSenderService : IEmailSenderService
             await client.AuthenticateAsync(
                 _emailSettings.Username,
                 _emailSettings.Password);
-            
+
             var confirmationCode = new EmailConfirmationCode
             {
                 UserId = user.Id,
@@ -69,16 +69,16 @@ public class EmailSenderService : IEmailSenderService
                 CreatedAt = DateTimeOffset.UtcNow,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
             };
-            
+
             _applicationContext.EmailConfirmationCodes.Add(confirmationCode);
             await _applicationContext.SaveChangesAsync();
-            
+
             _logger.LogInformation("Saved email confirmation code for UserId: {UserId}", user.Id);
-            
+
             await client.SendAsync(message);
 
             await client.DisconnectAsync(true);
-            
+
             _logger.LogInformation("Email confirmation code sent to user with Id {UserId}", user.Id);
         }
         catch (Exception ex)

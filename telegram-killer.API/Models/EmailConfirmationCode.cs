@@ -6,7 +6,7 @@ public class EmailConfirmationCode
     public string ConfirmationCodeHash { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
-    
+
     public Guid UserId { get; set; }
     public User User { get; set; }
 }

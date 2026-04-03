@@ -9,7 +9,7 @@ public class JwtConfigurationOptions
     public string Issuer { get; set; }
     public int Lifetime { get; set; }
     public string Key { get; set; }
-    
-    public SymmetricSecurityKey GetSymmetricSecurityKey() => 
+
+    public SymmetricSecurityKey GetSymmetricSecurityKey() =>
         new(Encoding.UTF8.GetBytes(Key));
 }
