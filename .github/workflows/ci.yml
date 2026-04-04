@@ -41,7 +41,7 @@ jobs:
       - name: ReportGenerator
         uses: danielpalme/ReportGenerator-GitHub-Action@5.5.4
         with:
-          reports: '**/TestResults/**/coverage.cobertura.xml'
+          reports: '**/test-results/**/coverage.cobertura.xml'
           targetdir: coveragereport
           reporttypes: Html;MarkdownSummaryGithub;MarkdownDeltaSummary;Badges
           sourcedirs: './telegram-killer.API'
