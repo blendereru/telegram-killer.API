@@ -20,13 +20,35 @@ jobs:
           dotnet-version: '9.0.x'
         
       - name: Build Project
-        run: dotnet build telegram-killer.API
+        run: dotnet build telegram-killer.sln --configuration Release
         
+      - name: Download previous coverage history
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-history
+          path: coverage-history
+        continue-on-error: true
+      
       - name: Run Tests
-        run: dotnet test tests/telegram-killer.API.IntegrationTests --logger "console;verbosity=detailed" --logger trx --results-directory test-results
-        
+        run: dotnet test telegram-killer.sln --collect:"XPlat Code Coverage" --logger "console;verbosity=detailed" --logger trx --results-directory test-results
+  
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: (!cancelled())
         with:
           files: test-results/**/*.trx
+
+      - name: ReportGenerator
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.4
+        with:
+          reports: '**/TestResults/**/coverage.cobertura.xml'
+          targetdir: coveragereport
+          reporttypes: Html;MarkdownSummaryGithub;MarkdownDeltaSummary;Badges
+          sourcedirs: './telegram-killer.API'
+          historydir: coverage-history
+
+      - name: Upload updated coverage history
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-history
+          path: coverage-history
