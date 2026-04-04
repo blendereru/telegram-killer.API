@@ -20,7 +20,7 @@ jobs:
           dotnet-version: '9.0.x'
         
       - name: Build Project
-        run: dotnet build telegram-killer.sln --configuration Release
+        run: dotnet build telegram-killer.API.sln --configuration Release
         
       - name: Download previous coverage history
         uses: actions/download-artifact@v4
@@ -30,7 +30,7 @@ jobs:
         continue-on-error: true
       
       - name: Run Tests
-        run: dotnet test telegram-killer.sln --collect:"XPlat Code Coverage" --logger "console;verbosity=detailed" --logger trx --results-directory test-results
+        run: dotnet test telegram-killer.API.sln --collect:"XPlat Code Coverage" --logger "console;verbosity=detailed" --logger trx --results-directory test-results
   
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
