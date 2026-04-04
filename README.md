@@ -1,4 +1,5 @@
 # Telegram killer
+[![ci](https://github.com/blendereru/telegram-killer.API/actions/workflows/ci.yml/badge.svg)](https://github.com/blendereru/telegram-killer.API/actions/workflows/ci.yml)
 
 Chat API made using ASP.NET Core + SignalR. Allows sending plain texts
 and marking sent messages as read in real-time. 
