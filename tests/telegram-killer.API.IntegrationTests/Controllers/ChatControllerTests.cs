@@ -1015,5 +1015,521 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         }
     }
 
+    [Fact]
+    public async Task GetChat_AccessTokenNotProvided_Returns401Unauthorized()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        var chatId = Guid.NewGuid();
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetChat_NonExistentChat_Returns404NotFoundWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        var nonExistentChatId = Guid.NewGuid();
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Arrange
+        var response = await client.GetAsync($"api/chat/{nonExistentChatId}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        
+        await TestHelpers.AssertProblemDetails(response, "not found");
+    }
+
+    [Fact]
+    public async Task GetChat_UserNotMemberOfChat_Returns404NotFoundWithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        const string chatParticipant1Email = "participant1@example.com";
+        const string chatParticipant2Email = "participant2@example.com";
+        Guid chatId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant1 = new User
+            {
+                Email = chatParticipant1Email,
+                Username = chatParticipant1Email,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant2 = new User
+            {
+                Email = chatParticipant2Email,
+                Username = chatParticipant2Email,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant1, anotherParticipant2);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = anotherParticipant1.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant2.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        
+        await TestHelpers.AssertProblemDetails(response, "not found");
+    }
+
+    [Fact]
+    public async Task GetChat_ChatIsChannel_DoesNotReturnParticipants()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        const string chatParticipantEmail = "participant@example.com";
+        Guid chatId;
+        
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+            
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = chatParticipantEmail,
+                Username = chatParticipantEmail,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+            
+            var chat = new Chat
+            {
+                Type = ChatType.Channel,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+            
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+        
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+        
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+        
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
+        var chatResponse = await response.Content.ReadFromJsonAsync<GetChatResponse>();
+
+        Assert.NotNull(chatResponse);
+        Assert.Equal(ChatType.Channel, chatResponse.Type);
+        Assert.Null(chatResponse.Participants);
+    }
+
+    [Theory]
+    [InlineData(ChatType.Direct)]
+    [InlineData(ChatType.Group)]
+    public async Task GetChat_ChatIsDirectOrGroup_ReturnsParticipants(ChatType chatType)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid chatId;
+        Guid userId;
+        Guid anotherParticipantId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            userId = user.Id;
+            anotherParticipantId = anotherParticipant.Id;
+
+            var newChat = new Chat
+            {
+                Type = chatType,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(newChat);
+            await context.SaveChangesAsync();
+
+            chatId = newChat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chat = await response.Content.ReadFromJsonAsync<GetChatResponse>();
+
+        Assert.NotNull(chat);
+        Assert.Equal(chatType, chat.Type);
+        Assert.NotNull(chat.Participants);
+
+        Assert.Equal(2, chat.Participants.Count);
+
+        var participantIds = chat.Participants.Select(p => p.Id).ToList();
+
+        Assert.Contains(userId, participantIds);
+        Assert.Contains(anotherParticipantId, participantIds);
+        Assert.Equal(2, participantIds.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData(ChatType.Group)]
+    [InlineData(ChatType.Channel)]
+    public async Task GetChat_ChatIsChannelOrGroup_ReturnsSetChatNames(ChatType chatType)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid chatId;
+        const string expectedName = "My Set Chat Name";
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = chatType,
+                Name = expectedName,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chatResponse = await response.Content.ReadFromJsonAsync<GetChatResponse>();
+        
+        Assert.NotNull(chatResponse);
+        Assert.Equal(expectedName, chatResponse.Name);
+    }
+
+    [Fact]
+    public async Task GetChat_ChatIsDirect_ReturnsAnotherUserName()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid chatId;
+        const string otherUserName = "participant@example.com";
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = otherUserName,
+                Username = otherUserName,
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chatResponse = await response.Content.ReadFromJsonAsync<GetChatResponse>();
+
+        Assert.NotNull(chatResponse);
+        Assert.Equal(ChatType.Direct, chatResponse.Type);
+        Assert.Equal(otherUserName, chatResponse.Name);
+    }
+
+    [Theory]
+    [InlineData(ChatType.Direct)]
+    [InlineData(ChatType.Group)]
+    public async Task GetChat_ReturnsExpectedChatData(ChatType chatType)
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+
+        string accessToken;
+        Guid chatId;
+        string expectedName;
+        Guid userId;
+        Guid anotherParticipantId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var anotherParticipant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(user, anotherParticipant);
+            await context.SaveChangesAsync();
+
+            userId = user.Id;
+            anotherParticipantId = anotherParticipant.Id;
+
+            expectedName = chatType == ChatType.Direct
+                ? anotherParticipant.Username
+                : "My Group Chat";
+
+            var newChat = new Chat
+            {
+                Type = chatType,
+                Name = expectedName,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = user.Id, JoinedAt = DateTimeOffset.UtcNow },
+                    new() { UserId = anotherParticipant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(newChat);
+            await context.SaveChangesAsync();
+
+            chatId = newChat.Id;
+
+            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
+            accessToken = tokensProviderService.GenerateAccessToken(user);
+        }
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
+
+        // Act
+        var response = await client.GetAsync($"api/chat/{chatId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var chat = await response.Content.ReadFromJsonAsync<GetChatResponse>();
+
+        Assert.NotNull(chat);
+        Assert.Equal(chatId, chat.ChatId);
+        Assert.Equal(chatType, chat.Type);
+        Assert.Equal(expectedName, chat.Name);
+        Assert.NotNull(chat.Participants);
+        Assert.Equal(2, chat.Participants.Count);
+
+        var participantIds = chat.Participants.Select(p => p.Id).ToList();
+        var participantUsernames = chat.Participants.Select(p => p.Username).ToList();
+
+        Assert.Contains(userId, participantIds);
+        Assert.Contains(anotherParticipantId, participantIds);
+        Assert.Contains("user@example.com", participantUsernames);
+        Assert.Contains("participant@example.com", participantUsernames);
+    }
+    
     public Task DisposeAsync() => Task.CompletedTask;
 }

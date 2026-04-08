@@ -84,4 +84,25 @@ public class ChatController : ControllerBase
 
         return Ok(messages);
     }
+
+    [EndpointSummary("Retrieve chat information")]
+    [EndpointDescription("Returns chat information")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<GetChatResponse>(StatusCodes.Status200OK)]
+    [HttpGet("{chatId:guid}")]
+    public async Task<IActionResult> GetChat([Required] Guid chatId)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            _logger.LogWarning("Invalid UserId format in JWT token");
+            throw new UnauthorizedException("Invalid token");
+        }
+
+        var chat = await _chatService.GetChat(chatId, userGuid);
+        
+        return Ok(chat);
+    }
 }

@@ -89,7 +89,6 @@ public class ChatService : IChatService
     public async Task<GetChatMessagesResponse> GetMessages(Guid chatId, Guid userId)
     {
         var participants = await _applicationContext.ChatParticipants
-            .AsNoTracking()
             .Where(cp => cp.ChatId == chatId)
             .Select(cp => new
             {
@@ -119,7 +118,6 @@ public class ChatService : IChatService
         }
 
         var messages = await _applicationContext.Messages
-            .AsNoTracking()
             .Where(m => m.ChatId == chatId)
             .OrderBy(m => m.SentAt)
             .Select(m => new MessageDto
@@ -280,5 +278,50 @@ public class ChatService : IChatService
             ReadAt = now,
             SenderId = message.SenderId
         };
+    }
+
+    public async Task<GetChatResponse> GetChat(Guid chatId, Guid userId)
+    {
+        var chat = await _applicationContext.Chats
+            .Where(c => c.Id == chatId &&
+                        c.Participants.Any(p => p.UserId == userId))
+            .Select(c => new GetChatResponse
+            {
+                ChatId = c.Id,
+                Type = c.Type,
+                Name = c.Type == ChatType.Direct
+                    ? c.Participants
+                        .Where(p => p.UserId != userId)
+                        .Select(p => p.User.Username)
+                        .FirstOrDefault()!
+                    : c.Name!
+            })
+            .FirstOrDefaultAsync();
+        
+        if (chat == null)
+        {
+            _logger.LogWarning(
+                "Chat retrieval failed: Chat not found or user is not a participant. ChatId: {ChatId}, UserId: {UserId}",
+                chatId, userId);
+            
+            throw new NotFoundException("Chat not found");
+        }
+
+        if (chat.Type != ChatType.Channel)
+        {
+            chat.Participants = await _applicationContext.ChatParticipants
+                .Where(p => p.ChatId == chatId)
+                .Select(p => new ChatParticipantDto
+                {
+                    Id = p.UserId,
+                    Username = p.User.Username
+                })
+                .ToListAsync();
+        }
+        
+        _logger.LogInformation("Chat retrieved successfully. ChatId: {ChatId}, UserId: {UserId}, Participants: {ParticipantCount}",
+            chat.ChatId, userId, chat.Participants?.Count);
+        
+        return chat;
     }
 }
