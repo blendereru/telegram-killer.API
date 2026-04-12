@@ -332,7 +332,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
     }
 
     [Fact]
-    public async Task CreateDirect_WhenChatDoesNotExistBetweenUsers_CreatesNewChatAndReturnsCreatedResponse()
+    public async Task CreateDirect_WhenChatDoesNotExistBetweenUsers_CreatesNewChat()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -391,8 +391,6 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         const string expectedRequesterUsername = "user1@example.com";
         const string expectedRequestedUsername = "user2@example.com";
         const string expectedChatName = expectedRequestedUsername;
-
-        Assert.NotNull(response.Headers.Location);
 
         var chatResponse = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
 
