@@ -49,10 +49,10 @@ public class ChatController : ControllerBase
 
     [EndpointSummary("Retrieve messages for a specific chat")]
     [EndpointDescription("Returns all messages belonging to the specified chat")]
-    [ProducesResponseType<GetChatMessagesResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<GetChatMessagesResponse>(StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     [HttpGet("{chatId:guid}/messages")]
     public async Task<IActionResult> GetMessages([Required] Guid chatId)
     {

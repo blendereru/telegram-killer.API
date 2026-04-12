@@ -1057,6 +1057,94 @@ public class ChatServiceTests : IClassFixture<TelegramKillerWebApplicationFactor
         await Assert.ThrowsAsync<NotFoundException>(() =>
             chatService.MarkAsRead(targetChatId, messageId, readerId));
     }
+
+    [Fact]
+    public async Task GetChat_ChatDoesNotExist_ThrowsNotFoundException()
+    {
+        // Arrange
+        Guid userId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var user = new User
+            {
+                Email = "user@example.com",
+                Username = "user@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+
+            userId = user.Id;
+        }
+
+        using var serviceScope = _factory.CreateScope();
+        var chatService = serviceScope.ServiceProvider.GetRequiredService<IChatService>();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            chatService.GetChat(Guid.NewGuid(), userId));
+    }
+    
+    [Fact]
+    public async Task GetChat_UserIsNotParticipant_ThrowsNotFoundException()
+    {
+        // Arrange
+        Guid chatId;
+        Guid outsiderId;
+
+        using (var scope = _factory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+
+            var participant = new User
+            {
+                Email = "participant@example.com",
+                Username = "participant@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            var outsider = new User
+            {
+                Email = "outsider@example.com",
+                Username = "outsider@example.com",
+                IsEmailConfirmed = true,
+                RegisteredAt = DateTimeOffset.UtcNow
+            };
+
+            context.Users.AddRange(participant, outsider);
+            await context.SaveChangesAsync();
+
+            outsiderId = outsider.Id;
+
+            var chat = new Chat
+            {
+                Type = ChatType.Direct,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Participants = new List<ChatParticipant>
+                {
+                    new() { UserId = participant.Id, JoinedAt = DateTimeOffset.UtcNow }
+                }
+            };
+
+            context.Chats.Add(chat);
+            await context.SaveChangesAsync();
+
+            chatId = chat.Id;
+        }
+
+        using var serviceScope = _factory.CreateScope();
+        var chatService = serviceScope.ServiceProvider.GetRequiredService<IChatService>();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            chatService.GetChat(chatId, outsiderId));
+    }
     
     public Task DisposeAsync() => Task.CompletedTask;
 }
