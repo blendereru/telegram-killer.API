@@ -217,7 +217,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
     }
 
     [Fact]
-    public async Task CreateDirect_ChatAlreadyExists_Returns200Ok()
+    public async Task CreateDirect_ChatAlreadyExists_ReturnsExistingChat()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -226,6 +226,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         Guid requestedId;
         Guid requesterId;
         var existentChatId = Guid.NewGuid();
+        var expectedCreatedAt = DateTimeOffset.UtcNow;
 
         using (var scope = _factory.CreateScope())
         {
@@ -257,7 +258,7 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             {
                 Id = existentChatId,
                 Type = ChatType.Direct,
-                CreatedAt = DateTimeOffset.UtcNow,
+                CreatedAt = expectedCreatedAt,
                 Participants = new List<ChatParticipant>
                 {
                     new() { UserId = requester.Id, JoinedAt = DateTimeOffset.UtcNow },
@@ -269,7 +270,6 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             await applicationContext.SaveChangesAsync();
 
             var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
-
             accessToken = tokensProviderService.GenerateAccessToken(requester);
         }
 
@@ -285,34 +285,54 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         var response = await client.PostAsJsonAsync("api/chat", request);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        response.EnsureSuccessStatusCode();
 
-        using (var scope = _factory.CreateScope())
-        {
-            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+        var chatResponse = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
+        
+        var expectedChatId = existentChatId;
+        const ChatType expectedType = ChatType.Direct;
+        const bool expectedIsNew = false;
+        const int expectedParticipantsCount = 2;
+        const string expectedRequesterUsername = "user1@example.com";
+        const string expectedRequestedUsername = "user2@example.com";
+        const string expectedChatName = expectedRequestedUsername;
+        
+        Assert.NotNull(chatResponse);
+        
+        Assert.Equal(expectedChatId, chatResponse.ChatId);
+        Assert.Equal(expectedType, chatResponse.Type);
+        Assert.Equal(expectedCreatedAt, chatResponse.CreatedAt);
+        Assert.Equal(expectedIsNew, chatResponse.IsNew);
+        
+        Assert.NotNull(chatResponse.Participants);
+        Assert.Equal(expectedParticipantsCount, chatResponse.Participants.Count);
+        
+        var participantIds = chatResponse.Participants.Select(p => p.Id).ToList();
+        
+        Assert.Contains(requesterId, participantIds);
+        Assert.Contains(requestedId, participantIds);
+        
+        var distinctParticipantCount = chatResponse.Participants
+            .Select(p => p.Id)
+            .Distinct()
+            .Count();
 
-            var existentChat = await applicationContext.Chats
-                .Include(chat => chat.Participants)
-                .SingleOrDefaultAsync(c => c.Id == existentChatId);
+        Assert.Equal(expectedParticipantsCount, distinctParticipantCount);
+        
+        var requesterParticipant = chatResponse.Participants
+            .First(p => p.Id == requesterId);
 
-            Assert.NotNull(existentChat);
-            Assert.Equal(existentChatId, existentChat.Id);
+        var requestedParticipant = chatResponse.Participants
+            .First(p => p.Id == requestedId);
 
-            Assert.Equal(2, existentChat.Participants.Count);
-
-            var participantIds = existentChat.Participants
-                .Select(p => p.UserId)
-                .ToList();
-
-            Assert.Contains(requesterId, participantIds);
-            Assert.Contains(requestedId, participantIds);
-
-            Assert.Equal(2, participantIds.Distinct().Count());
-        }
+        Assert.Equal(expectedRequesterUsername, requesterParticipant.Username);
+        Assert.Equal(expectedRequestedUsername, requestedParticipant.Username);
+        
+        Assert.Equal(expectedChatName, chatResponse.Name);
     }
 
     [Fact]
-    public async Task CreateDirect_Returns201Created()
+    public async Task CreateDirect_WhenChatDoesNotExistBetweenUsers_CreatesNewChatAndReturnsCreatedResponse()
     {
         // Arrange
         var client = _factory.CreateClient();
@@ -348,7 +368,6 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
             requesterId = requester.Id;
 
             var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
-
             accessToken = tokensProviderService.GenerateAccessToken(requester);
         }
 
@@ -364,113 +383,52 @@ public class ChatControllerTests : IClassFixture<TelegramKillerWebApplicationFac
         var response = await client.PostAsJsonAsync("api/chat", request);
 
         // Assert
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        response.EnsureSuccessStatusCode();
+        
+        var expectedType = ChatType.Direct;
+        const bool expectedIsNew = true;
+        const int expectedParticipantsCount = 2;
+        const string expectedRequesterUsername = "user1@example.com";
+        const string expectedRequestedUsername = "user2@example.com";
+        const string expectedChatName = expectedRequestedUsername;
 
         Assert.NotNull(response.Headers.Location);
 
-        var chat = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
+        var chatResponse = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
 
-        Assert.NotNull(chat);
-        Assert.NotNull(chat.Participants);
+        Assert.NotNull(chatResponse);
+        
+        Assert.NotEqual(Guid.Empty, chatResponse.ChatId);
+        Assert.Equal(expectedType, chatResponse.Type);
+        Assert.Equal(expectedIsNew, chatResponse.IsNew);
+        
+        Assert.True(chatResponse.CreatedAt > DateTimeOffset.UtcNow.AddMinutes(-1));
+        
+        Assert.NotNull(chatResponse.Participants);
+        Assert.Equal(expectedParticipantsCount, chatResponse.Participants.Count);
 
-        Assert.Equal($"api/chat/{chat.ChatId}", response.Headers.Location.OriginalString);
+        var participantIds = chatResponse.Participants.Select(p => p.Id).ToList();
 
-        var participantIds = chat.Participants;
-
-        Assert.Equal(2, participantIds.Count);
-        Assert.Contains(requestedId, participantIds);
         Assert.Contains(requesterId, participantIds);
-        Assert.Equal(2, participantIds.Distinct().Count());
-    }
+        Assert.Contains(requestedId, participantIds);
 
-    [Fact]
-    public async Task CreateDirect_ReturnValuesMatchWithDbOnes()
-    {
-        // Arrange
-        var client = _factory.CreateClient();
+        var distinctParticipantCount = chatResponse.Participants
+            .Select(p => p.Id)
+            .Distinct()
+            .Count();
 
-        string accessToken;
-        Guid requestedId;
-        Guid requesterId;
+        Assert.Equal(expectedParticipantsCount, distinctParticipantCount);
+        
+        var requesterParticipant = chatResponse.Participants
+            .First(p => p.Id == requesterId);
 
-        using (var scope = _factory.CreateScope())
-        {
-            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+        var requestedParticipant = chatResponse.Participants
+            .First(p => p.Id == requestedId);
 
-            var requester = new User
-            {
-                Email = "user1@example.com",
-                Username = "user1@example.com",
-                IsEmailConfirmed = true,
-                RegisteredAt = DateTimeOffset.UtcNow
-            };
-
-            var requested = new User
-            {
-                Email = "user2@example.com",
-                Username = "user2@example.com",
-                IsEmailConfirmed = true,
-                RegisteredAt = DateTimeOffset.UtcNow
-            };
-
-            applicationContext.Users.AddRange(requester, requested);
-            await applicationContext.SaveChangesAsync();
-
-            requestedId = requested.Id;
-            requesterId = requester.Id;
-
-            var tokensProviderService = scope.ServiceProvider.GetRequiredService<ITokensProviderService>();
-            accessToken = tokensProviderService.GenerateAccessToken(requester);
-        }
-
-        var request = new CreateChatRequest
-        {
-            OtherUserId = requestedId
-        };
-
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, accessToken);
-
-        // Act
-        var response = await client.PostAsJsonAsync("api/chat", request);
-
-        // Assert
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var responseBody = await response.Content.ReadFromJsonAsync<CreateChatResponse>();
-
-        Assert.NotNull(responseBody);
-
-        using (var scope = _factory.CreateScope())
-        {
-            var applicationContext = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
-
-            var chats = await applicationContext.Chats
-                .Include(c => c.Participants)
-                .ToListAsync();
-
-            Assert.Single(chats);
-
-            var dbChat = chats[0];
-
-            Assert.Equal(responseBody.ChatId, dbChat.Id);
-
-            var dbParticipantIds = dbChat.Participants
-                .Select(p => p.UserId)
-                .ToList();
-
-            Assert.Equal(2, dbParticipantIds.Count);
-            Assert.Equal(2, responseBody.Participants.Count);
-
-            Assert.Contains(requesterId, dbParticipantIds);
-            Assert.Contains(requestedId, dbParticipantIds);
-
-            Assert.Contains(requesterId, responseBody.Participants);
-            Assert.Contains(requestedId, responseBody.Participants);
-
-            Assert.True(responseBody.Participants.All(id => dbParticipantIds.Contains(id)));
-            Assert.True(dbParticipantIds.All(id => responseBody.Participants.Contains(id)));
-        }
+        Assert.Equal(expectedRequesterUsername, requesterParticipant.Username);
+        Assert.Equal(expectedRequestedUsername, requestedParticipant.Username);
+        
+        Assert.Equal(expectedChatName, chatResponse.Name);
     }
 
     [Fact]

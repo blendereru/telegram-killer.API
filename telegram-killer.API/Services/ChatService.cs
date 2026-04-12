@@ -19,24 +19,35 @@ public class ChatService : IChatService
         _logger = logger;
     }
 
-    public async Task<Chat> CreateDirectChat(Guid requesterId, Guid requestedId)
+    public async Task<CreateChatResponse> CreateDirectChat(Guid requesterId, Guid requestedId)
     {
         if (requesterId == requestedId)
         {
-            _logger.LogWarning("Attempted to create a chat with oneself. Requested: {RequestedId}", requestedId);
+            _logger.LogWarning(
+                "Attempted to create a chat with oneself. Requested: {RequestedId}", 
+                requestedId);
+
             throw new ValidationException("Cannot create a chat with yourself");
         }
 
-        var targetUser = await _applicationContext.Users
-            .Where(u => u.Id == requestedId)
-            .Select(u => new { u.Id, u.IsEmailConfirmed })
-            .FirstOrDefaultAsync();
+        var users = await _applicationContext.Users
+            .Where(u => u.Id == requesterId || u.Id == requestedId)
+            .Select(u => new
+            {
+                u.Id,
+                u.Username,
+                u.IsEmailConfirmed
+            })
+            .ToListAsync();
+
+        var targetUser = users.FirstOrDefault(u => u.Id == requestedId);
 
         if (targetUser == null || !targetUser.IsEmailConfirmed)
         {
             _logger.LogWarning(
                 "Chat creation failed: Requested user does not exist or has non-confirmed email. RequesterId: {RequesterId}",
                 requesterId);
+
             throw new NotFoundException("Requested user is not found");
         }
 
@@ -45,6 +56,17 @@ public class ChatService : IChatService
             .Where(c => c.Type == ChatType.Direct)
             .Where(c => c.Participants.Any(p => p.UserId == requesterId))
             .Where(c => c.Participants.Any(p => p.UserId == requestedId))
+            .Select(c => new
+            {
+                c.Id,
+                c.Type,
+                c.CreatedAt,
+                Participants = c.Participants.Select(p => new ChatParticipantDto
+                {
+                    Id = p.User.Id,
+                    Username = p.User.Username
+                }).ToList()
+            })
             .FirstOrDefaultAsync();
 
         if (existingChat != null)
@@ -52,17 +74,29 @@ public class ChatService : IChatService
             _logger.LogInformation(
                 "Chat already exists between users. Returning existing chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}",
                 existingChat.Id, requesterId, requestedId);
-            return existingChat;
+
+            return new CreateChatResponse
+            {
+                ChatId = existingChat.Id,
+                Type = existingChat.Type,
+                Participants = existingChat.Participants,
+                CreatedAt = existingChat.CreatedAt,
+                IsNew = false,
+                Name = existingChat.Participants
+                    .First(p => p.Id != requesterId).Username
+            };
         }
+
+        var now = DateTimeOffset.UtcNow;
 
         var chat = new Chat
         {
             Type = ChatType.Direct,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = now,
             Participants = new List<ChatParticipant>
             {
-                new() { UserId = requesterId, JoinedAt = DateTimeOffset.UtcNow },
-                new() { UserId = requestedId, JoinedAt = DateTimeOffset.UtcNow }
+                new() { UserId = requesterId, JoinedAt = now },
+                new() { UserId = requestedId, JoinedAt = now }
             }
         };
 
@@ -71,6 +105,7 @@ public class ChatService : IChatService
         try
         {
             await _applicationContext.SaveChangesAsync();
+
             _logger.LogInformation(
                 "Successfully created a new direct chat. ChatId: {ChatId}, RequesterId: {RequesterId}, RequestedId: {RequestedId}",
                 chat.Id, requesterId, requestedId);
@@ -80,10 +115,25 @@ public class ChatService : IChatService
             _logger.LogError(ex,
                 "Error occurred while saving new chat to database. RequesterId: {RequesterId}, RequestedId: {RequestedId}",
                 requesterId, requestedId);
+
             throw;
         }
+        
+        var participants = users.Select(u => new ChatParticipantDto
+        {
+            Id = u.Id,
+            Username = u.Username
+        }).ToList();
 
-        return chat;
+        return new CreateChatResponse
+        {
+            ChatId = chat.Id,
+            Type = chat.Type,
+            Participants = participants,
+            CreatedAt = chat.CreatedAt,
+            IsNew = true,
+            Name = participants.First(p => p.Id != requesterId).Username
+        };
     }
 
     public async Task<GetChatMessagesResponse> GetMessages(Guid chatId, Guid userId)

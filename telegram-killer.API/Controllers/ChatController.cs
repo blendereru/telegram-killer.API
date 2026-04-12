@@ -26,9 +26,9 @@ public class ChatController : ControllerBase
     [EndpointSummary("Create a direct chat(conversation) with user")]
     [EndpointDescription("Create a direct chat with user providing wanted user's id in the body")]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
-    [ProducesResponseType<CreateChatResponse>(StatusCodes.Status201Created, "application/json")]
     [ProducesResponseType<CreateChatResponse>(StatusCodes.Status200OK, "application/json")]
     [Consumes("application/json")]
     [HttpPost]
@@ -42,25 +42,9 @@ public class ChatController : ControllerBase
             throw new UnauthorizedException("Invalid token");
         }
 
-        var chat = await _chatService.CreateDirectChat(userGuid, request.OtherUserId);
+        var chatResponse = await _chatService.CreateDirectChat(userGuid, request.OtherUserId);
 
-        var chatResponse = new CreateChatResponse
-        {
-            ChatId = chat.Id,
-            CreatedAt = chat.CreatedAt
-        };
-
-        if (chat.Participants.Count == 0)
-        {
-            chatResponse.Participants = [userGuid, request.OtherUserId];
-            return Ok(chatResponse);
-        }
-
-        chatResponse.Participants = chat.Participants.Select(p => p.UserId).ToList();
-
-        var location = $"api/chat/{chat.Id}"; // refactor later.
-
-        return Created(location, chatResponse);
+        return Ok(chatResponse);
     }
 
     [EndpointSummary("Retrieve messages for a specific chat")]
